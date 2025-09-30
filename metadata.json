@@ -1,0 +1,5 @@
+{
+  "name": "AI Assisted Ebook Cataloger",
+  "description": "An application that uses Gemini to analyze ebooks, extract metadata, and generate cataloging information like summaries and classifications.",
+  "requestFramePermissions": []
+}

@@ -1,0 +1,138 @@
+import React, { useCallback, useState, useEffect } from 'react';
+
+type FileType = 'pdf' | 'epub';
+
+interface FileUploadProps {
+  file: File | null;
+  fileType: FileType;
+  onFileChange: (file: File | null) => void;
+  onFileTypeChange: (type: FileType) => void;
+  disabled: boolean;
+}
+
+const PdfIcon: React.FC = () => (
+  <svg className="w-12 h-12 text-cyan-400" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+    <path fillRule="evenodd" clipRule="evenodd" d="M4 2C2.89543 2 2 2.89543 2 4V20C2 21.1046 2.89543 22 4 22H20C21.1046 22 22 21.1046 22 20V8.82843C22 8.29799 21.7893 7.78929 21.4142 7.41421L16.5858 2.58579C16.2107 2.21071 15.702 2 15.1716 2H4ZM8.5 10C7.67157 10 7 10.6716 7 11.5V13C7 13.8284 7.67157 14.5 8.5 14.5H9.5V16H11V10H8.5ZM8.5 11.5H9.5V13H8.5V11.5ZM17 11.5C17 10.6716 16.3284 10 15.5 10H13V16H14.5V13.5H15.5C16.3284 13.5 17 12.8284 17 12V11.5ZM14.5 12H15.5V12.5H14.5V12Z" />
+  </svg>
+);
+
+const EpubIcon: React.FC = () => (
+  <svg className="w-12 h-12 text-cyan-400" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+    <path fillRule="evenodd" clipRule="evenodd" d="M18 2H6C4.89543 2 4 2.89543 4 4V20C4 21.1046 4.89543 22 6 22H18C19.1046 22 20 21.1046 20 20V4C20 2.89543 19.1046 2 18 2ZM11 4H6V12.5L8.5 11L11 12.5V4ZM13 18V16H18V18H13ZM13 14V12H18V14H13ZM13 10V8H18V10H13Z" />
+  </svg>
+);
+
+
+export const FileUpload: React.FC<FileUploadProps> = ({ file, fileType, onFileChange, onFileTypeChange, disabled }) => {
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const [showSuccess, setShowSuccess] = useState<boolean>(false);
+
+  useEffect(() => {
+    // If the file is cleared from the parent, don't show the success icon
+    if (!file) {
+      setShowSuccess(false);
+    }
+  }, [file]);
+
+  const handleFileSelect = useCallback((selectedFile: File | null) => {
+    onFileChange(selectedFile);
+    if (selectedFile) {
+        setShowSuccess(true);
+        // Show the success icon for 1.5s, then transition to showing the file name
+        setTimeout(() => setShowSuccess(false), 1500);
+    }
+  }, [onFileChange]);
+
+  const onInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    handleFileSelect(e.target.files ? e.target.files[0] : null);
+    e.target.value = ''; // Allow re-uploading the same file
+  };
+  
+  const handleDragEvents = (e: React.DragEvent<HTMLLabelElement>, entering: boolean) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!disabled) {
+        setIsDragging(entering);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLLabelElement>) => {
+    handleDragEvents(e, false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+        handleFileSelect(e.dataTransfer.files[0]);
+    }
+  };
+
+  const acceptedMimeTypes = fileType === 'pdf' ? 'application/pdf' : 'application/epub+zip';
+  const acceptedExtension = fileType === 'pdf' ? '.pdf' : '.epub';
+
+  const renderContent = () => {
+    if (showSuccess) {
+      return (
+        <div className="flex flex-col items-center justify-center animate-fade-in text-center">
+          {fileType === 'pdf' ? <PdfIcon /> : <EpubIcon />}
+          <p className="mt-2 text-sm font-semibold text-slate-300">File accepted!</p>
+        </div>
+      );
+    }
+
+    if (file) {
+      return (
+        <p className="font-semibold text-cyan-400 break-all px-2 animate-fade-in">{file.name}</p>
+      );
+    }
+
+    return (
+      <>
+        <svg className="w-10 h-10 mb-3 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-4-4V6a4 4 0 014-4h1.586a1 1 0 01.707.293l1.414 1.414a1 1 0 00.707.293H13.5a4 4 0 014 4v1.586a1 1 0 01-.293.707l-1.414 1.414a1 1 0 00-.293.707V16m-7-5l3-3m0 0l3 3m-3-3v12"></path></svg>
+        <p className="mb-2 text-sm text-slate-400"><span className="font-semibold">Click to upload</span> or drag and drop</p>
+        <p className="text-xs text-slate-500">{fileType.toUpperCase()} only</p>
+      </>
+    );
+  };
+
+  return (
+    <div className="w-full">
+      <div className="flex justify-center mb-4">
+        <div className="bg-slate-900 p-1 rounded-lg flex gap-1 border border-slate-700">
+          <button 
+            onClick={() => onFileTypeChange('pdf')} 
+            disabled={disabled}
+            className={`px-4 py-1 rounded-md text-sm font-semibold transition-colors duration-200 ${fileType === 'pdf' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-700/50'}`}
+            aria-pressed={fileType === 'pdf'}
+          >
+            PDF
+          </button>
+          <button 
+            onClick={() => onFileTypeChange('epub')} 
+            disabled={disabled}
+            className={`px-4 py-1 rounded-md text-sm font-semibold transition-colors duration-200 ${fileType === 'epub' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-700/50'}`}
+            aria-pressed={fileType === 'epub'}
+          >
+            EPUB
+          </button>
+        </div>
+      </div>
+      <label
+        htmlFor="file-upload"
+        onDragEnter={(e) => handleDragEvents(e, true)}
+        onDragLeave={(e) => handleDragEvents(e, false)}
+        onDragOver={(e) => handleDragEvents(e, true)}
+        onDrop={handleDrop}
+        className={`flex flex-col items-center justify-center w-full h-48 border-2 border-dashed rounded-lg cursor-pointer transition-all duration-300 ${
+          disabled ? 'bg-slate-700/50 border-slate-600 cursor-not-allowed' :
+          isDragging ? 'bg-indigo-900/50 border-indigo-400 scale-105' : 'bg-slate-800 border-slate-600 hover:bg-slate-700/50 hover:border-slate-500'
+        }`}
+      >
+        <div className="flex flex-col items-center justify-center pt-5 pb-6 px-4 text-center h-full">
+          {isDragging ? (
+            <p className="text-lg font-semibold text-indigo-300">Release to upload</p>
+          ) : (
+            renderContent()
+          )}
+        </div>
+        <input id="file-upload" type="file" className="hidden" accept={`${acceptedMimeTypes},${acceptedExtension}`} onChange={onInputChange} disabled={disabled} key={fileType} />
+      </label>
+    </div>
+  );
+};
