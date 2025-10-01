@@ -1,18 +1,36 @@
-// This is a common approximation for syllable counting in English.
-// It's not perfect but works for the Flesch-Kincaid formula's purpose.
+/**
+ * A refined heuristic-based function to count syllables in an English word.
+ * It's not perfect but provides a reasonable approximation for readability formulas.
+ * @param word The word to count syllables for.
+ * @returns An estimated number of syllables.
+ */
 function countSyllables(word: string): number {
   if (!word) return 0;
-  word = word.toLowerCase().trim();
+
+  // 1. Clean the word: lowercase, remove non-alphabetic characters.
+  word = word.toLowerCase().trim().replace(/[^a-z]/g, '');
+  if (word.length === 0) return 0;
+
+  // 2. Short words are almost always one syllable.
   if (word.length <= 3) return 1;
-  // Common suffixes that are not syllables
+
+  // 3. Apply regex rules for common suffixes and vowel patterns.
+  // Remove common suffixes that are not typically separate syllables (e.g., -es, -ed).
+  // Also removes silent 'e' at the end of a word (e.g., 'skate' -> 'skat').
+  // This rule is designed to not remove 'e' from consonant-'l'-'e' endings like in 'able'.
   word = word.replace(/(?:[^laeiouy]es|ed|[^laeiouy]e)$/, '');
-  // A lone 'y' at the start of a word is not a vowel
+  
+  // 'y' at the start of a word is treated as a consonant.
   word = word.replace(/^y/, '');
-  // Find groups of vowels (a, e, i, o, u, y)
-  const match = word.match(/[aeiouy]{1,2}/g);
-  // A word must have at least one syllable
-  return match ? Math.max(1, match.length) : 1;
+
+  // 4. Count the number of vowel groups. A consecutive group of vowels is counted as one syllable.
+  // This is more accurate than counting individual vowels or using flawed di/tri-graph logic.
+  const vowelGroups = word.match(/[aeiouy]+/g);
+
+  // 5. A word must have at least one syllable.
+  return vowelGroups ? Math.max(1, vowelGroups.length) : 1;
 }
+
 
 function countWords(text: string): number {
     if (!text) return 0;
@@ -56,14 +74,16 @@ export function calculateFleschKincaid(text: string): ReadingLevel | null {
   const roundedScore = Math.max(0, score); 
 
   let level: string;
-  if (roundedScore <= 3) {
-    level = 'Elementary School';
-  } else if (roundedScore <= 9) {
+  if (roundedScore < 5) {
+    level = 'Early Elementary School';
+  } else if (roundedScore < 9) {
     level = 'Middle School';
-  } else if (roundedScore <= 12) {
+  } else if (roundedScore < 13) {
     level = 'High School';
+  } else if (roundedScore < 17) {
+    level = 'College';
   } else {
-    level = 'College / Advanced';
+    level = 'Graduate / Professional';
   }
   
   return {
@@ -82,6 +102,7 @@ export function calculateGunningFog(text: string): ReadingLevel | null {
   const sentenceCount = countSentences(text);
   
   const words = text.trim().split(/\s+/);
+  // A "complex" word in Gunning Fog is defined as a word with 3 or more syllables.
   const complexWordCount = words.filter(word => countSyllables(word) >= 3).length;
 
   // Prevent division by zero
@@ -94,26 +115,22 @@ export function calculateGunningFog(text: string): ReadingLevel | null {
   const roundedScore = Math.max(0, score);
   
   let level: string;
-  if (roundedScore >= 20) {
-    level = 'Post-graduate plus';
+  if (roundedScore >= 18) {
+    level = 'Post-graduate / Professional';
   } else if (roundedScore >= 17) {
-    level = 'Post-graduate';
-  } else if (roundedScore >= 16) {
-    level = 'College senior';
+    level = 'College Graduate';
   } else if (roundedScore >= 13) {
     level = 'College';
-  } else if (roundedScore >= 11) {
-    level = 'High school';
-  } else if (roundedScore >= 10) {
-    level = 'High school sophomore';
+  } else if (roundedScore >= 12) {
+    level = 'High School Senior';
   } else if (roundedScore >= 9) {
-    level = 'High school freshman';
+    level = 'High School';
   } else if (roundedScore >= 8) {
-    level = '8th grade';
+    level = '8th Grade';
   } else if (roundedScore >= 7) {
-    level = '7th grade';
+    level = '7th Grade';
   } else if (roundedScore >= 6) {
-    level = '6th grade';
+    level = '6th Grade';
   } else {
     level = 'Elementary School';
   }
