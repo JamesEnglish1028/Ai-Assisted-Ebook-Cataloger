@@ -23,6 +23,10 @@ export interface FileMetadata {
   };
   publisher?: string;
   publicationDate?: string;
+  pageCount?: {
+    value: number;
+    type: 'actual' | 'estimated';
+  };
   // Accessibility
   accessibilityFeatures?: string[];
   accessModes?: string[];
@@ -156,7 +160,7 @@ export const MetadataDisplay: React.FC<MetadataDisplayProps> = ({ metadata }) =>
     return null;
   }
 
-  const hasCoreInfo = metadata.title || metadata.author || metadata.publisher || metadata.publicationDate || metadata.identifier || metadata.subject || metadata.keywords;
+  const hasCoreInfo = metadata.title || metadata.author || metadata.publisher || metadata.publicationDate || metadata.identifier || metadata.pageCount || metadata.subject || metadata.keywords;
   const hasClassificationInfo = metadata.fieldOfStudy || metadata.discipline || (metadata.lcc && metadata.lcc.length > 0) || (metadata.bisac && metadata.bisac.length > 0) || (metadata.lcsh && metadata.lcsh.length > 0);
   const hasReadabilityInfo = metadata.readingLevel || metadata.gunningFog;
   const hasAccessibilityInfo = metadata.certification || (metadata.accessibilityFeatures && metadata.accessibilityFeatures.length > 0) || (metadata.accessModes && metadata.accessModes.length > 0) || (metadata.accessModesSufficient && metadata.accessModesSufficient.length > 0) || (metadata.hazards && metadata.hazards.length > 0);
@@ -171,6 +175,20 @@ export const MetadataDisplay: React.FC<MetadataDisplayProps> = ({ metadata }) =>
           {metadata.author && <MetadataItem label="Author" value={metadata.author} />}
           {metadata.publisher && <MetadataItem label="Publisher" value={metadata.publisher} />}
           {metadata.publicationDate && <MetadataItem label="Publication Date" value={metadata.publicationDate} />}
+          
+          {metadata.pageCount && (
+            <MetadataItem 
+              label="Pages" 
+              value={
+                <>
+                  {metadata.pageCount.type === 'estimated' && '~'}
+                  {metadata.pageCount.value}
+                  {metadata.pageCount.type === 'estimated' && <span className="text-xs text-slate-400 ml-2">(estimated)</span>}
+                </>
+              } 
+            />
+          )}
+
           {metadata.identifier && (
               <MetadataItem 
                   label="Identifier / ISBN" 

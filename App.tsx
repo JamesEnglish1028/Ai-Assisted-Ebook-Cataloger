@@ -18,10 +18,12 @@ const jszipLib = import('https://esm.run/jszip');
 type Status = 'idle' | 'parsing' | 'summarizing' | 'success' | 'error';
 type FileType = 'pdf' | 'epub';
 
+type OmittedMetadata = 'lcc' | 'bisac' | 'lcsh' | 'fieldOfStudy' | 'discipline' | 'readingLevel' | 'gunningFog';
+
 type ParseResult = {
     text: string;
     coverImageUrl: string | null;
-    metadata: Omit<FileMetadata, 'lcc' | 'bisac' | 'lcsh' | 'fieldOfStudy' | 'discipline' | 'readingLevel' | 'gunningFog'>;
+    metadata: Omit<FileMetadata, OmittedMetadata>;
 };
 
 const statusMessages: Record<Status, string> = {
@@ -225,7 +227,7 @@ export default function App() {
             }
         }
 
-        const metadata: Omit<FileMetadata, 'lcc' | 'bisac' | 'lcsh' | 'fieldOfStudy' | 'discipline' | 'readingLevel' | 'gunningFog'> = {
+        const metadata: Omit<FileMetadata, OmittedMetadata> = {
             title: info.Title || undefined,
             author: textFoundAuthor || info.Author || undefined,
             subject: info.Subject || undefined,
@@ -233,6 +235,7 @@ export default function App() {
             publisher: textFoundPublisher || info.Producer || undefined,
             publicationDate: parsePdfDate(info.CreationDate),
             identifier: foundIdentifier,
+            pageCount: { value: numPages, type: 'actual' },
         };
 
         // Try to extract the first page as a cover image
@@ -296,6 +299,7 @@ export default function App() {
         const JSZip = (await jszipLib).default;
         const zip = await JSZip.loadAsync(fileToParse);
         let coverImageUrl: string | null = null;
+        let ncxPath: string | undefined;
 
         // Find OPF file path from container.xml
         const containerFile = zip.file("META-INF/container.xml");
@@ -318,7 +322,7 @@ export default function App() {
             return element?.textContent?.trim() || undefined;
         }
 
-        const getMetaProperty = (name: string): string[] => {
+        const getMetaPropertyValues = (name: string): string[] => {
             const elements = opfDoc.querySelectorAll(`meta[property="${name}"]`);
             const values: string[] = [];
             elements.forEach(el => {
@@ -327,53 +331,7 @@ export default function App() {
             });
             return values;
         };
-
-        const metadata: Omit<FileMetadata, 'lcc' | 'bisac' | 'lcsh' | 'fieldOfStudy' | 'discipline' | 'readingLevel' | 'gunningFog'> = {
-            title: getDcElement('title'),
-            author: getDcElement('creator'),
-            subject: getDcElement('subject'),
-            publisher: getDcElement('publisher'),
-            publicationDate: (() => {
-                const dateStr = getDcElement('date');
-                if (!dateStr) return undefined;
-                try {
-                    return new Date(dateStr).toLocaleDateString();
-                } catch {
-                    return dateStr; // return original string if parsing fails
-                }
-            })(),
-            identifier: (() => {
-                const identifiers = opfDoc.getElementsByTagName('dc:identifier');
-                let foundIsbn: string | undefined;
-                let firstIdentifier: string | undefined;
-
-                for (let i = 0; i < identifiers.length; i++) {
-                    const el = identifiers[i];
-                    const idText = el.textContent?.trim();
-                    if (!firstIdentifier && idText) {
-                        firstIdentifier = idText;
-                    }
-                    const scheme = el.getAttribute('opf:scheme') || el.getAttribute('scheme');
-                    if (scheme === 'ISBN' && idText) {
-                        foundIsbn = idText;
-                        break;
-                    }
-                }
-                const isbnToUse = findIsbnInString(foundIsbn || firstIdentifier);
-                return isbnToUse ? { value: isbnToUse, source: 'metadata' } : undefined;
-            })(),
-            // Accessibility Metadata
-            accessibilityFeatures: getMetaProperty('schema:accessibilityFeature'),
-            accessModes: getMetaProperty('schema:accessMode'),
-            accessModesSufficient: getMetaProperty('schema:accessModeSufficient'),
-            hazards: getMetaProperty('schema:accessibilityHazard'),
-            certification: (() => {
-                const el = opfDoc.querySelector(`meta[property="dcterms:conformsTo"]`);
-                return el?.textContent?.trim();
-            })(),
-        };
-
-
+        
         const manifest = new Map<string, { href: string; mediaType: string }>();
         const manifestItems = opfDoc.getElementsByTagName("item");
         for (let i = 0; i < manifestItems.length; i++) {
@@ -382,25 +340,14 @@ export default function App() {
             const href = item.getAttribute("href");
             const mediaType = item.getAttribute("media-type");
             if (id && href && mediaType) {
-                manifest.set(id, { href: opfDirectory + href, mediaType });
-            }
-        }
-        
-        // Find cover image
-        const coverMeta = opfDoc.querySelector('meta[name="cover"]');
-        const coverId = coverMeta ? coverMeta.getAttribute('content') : (opfDoc.querySelector('item[properties~="cover-image"]')?.getAttribute('id'));
-
-        if (coverId) {
-            const coverItem = manifest.get(coverId);
-            if (coverItem) {
-                const coverFile = zip.file(coverItem.href);
-                if (coverFile) {
-                    const imageBlob = await coverFile.async('blob');
-                    coverImageUrl = URL.createObjectURL(imageBlob);
+                const fullHref = opfDirectory + href;
+                manifest.set(id, { href: fullHref, mediaType });
+                if (mediaType === 'application/x-dtbncx+xml') {
+                  ncxPath = fullHref;
                 }
             }
         }
-
+        
         const spineItems = opfDoc.getElementsByTagName("itemref");
         const contentPromises: Promise<string>[] = [];
 
@@ -425,6 +372,111 @@ export default function App() {
 
         const chaptersText = await Promise.all(contentPromises);
         let fullText = chaptersText.join('\n\n');
+
+        const pageCount = await (async (): Promise<FileMetadata['pageCount']> => {
+            // 1. Try to find highest page number from pagelist in NCX
+            if (ncxPath) {
+                const ncxFile = zip.file(ncxPath);
+                if (ncxFile) {
+                    try {
+                        const ncxXmlText = await ncxFile.async("string");
+                        const ncxDoc = parser.parseFromString(ncxXmlText, "application/xml");
+                        const pageList = ncxDoc.querySelector("pageList");
+                        if (pageList) {
+                            const pageTargets = pageList.querySelectorAll("pageTarget");
+                            let maxPage = 0;
+                            pageTargets.forEach(target => {
+                                const value = target.getAttribute("value") || target.getAttribute("playOrder");
+                                if (value) {
+                                    const pageNum = parseInt(value, 10);
+                                    if (!isNaN(pageNum) && pageNum > maxPage) {
+                                        maxPage = pageNum;
+                                    }
+                                }
+                            });
+                            if (maxPage > 0) return { value: maxPage, type: 'actual' };
+                        }
+                    } catch (e) {
+                        console.warn("Could not parse NCX pagelist", e);
+                    }
+                }
+            }
+
+            // 2. Fallback to schema:numberOfPages meta property
+            const pageEl = opfDoc.querySelector('meta[property="schema:numberOfPages"]');
+            const pageStr = pageEl?.textContent?.trim();
+            if (pageStr) {
+                const pages = parseInt(pageStr, 10);
+                if (!isNaN(pages)) return { value: pages, type: 'actual' };
+            }
+
+            // 3. Estimate based on character count
+            const CHARS_PER_PAGE = 1500;
+            const estimatedPages = Math.round(fullText.length / CHARS_PER_PAGE);
+            return { value: estimatedPages > 0 ? estimatedPages : 1, type: 'estimated' };
+        })();
+
+
+        const metadata: Omit<FileMetadata, OmittedMetadata> = {
+            title: getDcElement('title'),
+            author: getDcElement('creator'),
+            subject: getDcElement('subject'),
+            publisher: getDcElement('publisher'),
+            publicationDate: (() => {
+                const dateStr = getDcElement('date');
+                if (!dateStr) return undefined;
+                try {
+                    return new Date(dateStr).toLocaleDateString();
+                } catch {
+                    return dateStr; // return original string if parsing fails
+                }
+            })(),
+            pageCount: pageCount,
+            identifier: (() => {
+                const identifiers = opfDoc.getElementsByTagName('dc:identifier');
+                let foundIsbn: string | undefined;
+                let firstIdentifier: string | undefined;
+
+                for (let i = 0; i < identifiers.length; i++) {
+                    const el = identifiers[i];
+                    const idText = el.textContent?.trim();
+                    if (!firstIdentifier && idText) {
+                        firstIdentifier = idText;
+                    }
+                    const scheme = el.getAttribute('opf:scheme') || el.getAttribute('scheme');
+                    if (scheme === 'ISBN' && idText) {
+                        foundIsbn = idText;
+                        break;
+                    }
+                }
+                const isbnToUse = findIsbnInString(foundIsbn || firstIdentifier);
+                return isbnToUse ? { value: isbnToUse, source: 'metadata' } : undefined;
+            })(),
+            // Accessibility Metadata
+            accessibilityFeatures: getMetaPropertyValues('schema:accessibilityFeature'),
+            accessModes: getMetaPropertyValues('schema:accessMode'),
+            accessModesSufficient: getMetaPropertyValues('schema:accessModeSufficient'),
+            hazards: getMetaPropertyValues('schema:accessibilityHazard'),
+            certification: (() => {
+                const el = opfDoc.querySelector(`meta[property="dcterms:conformsTo"]`);
+                return el?.textContent?.trim();
+            })(),
+        };
+
+        // Find cover image
+        const coverMeta = opfDoc.querySelector('meta[name="cover"]');
+        const coverId = coverMeta ? coverMeta.getAttribute('content') : (opfDoc.querySelector('item[properties~="cover-image"]')?.getAttribute('id'));
+
+        if (coverId) {
+            const coverItem = manifest.get(coverId);
+            if (coverItem) {
+                const coverFile = zip.file(coverItem.href);
+                if (coverFile) {
+                    const imageBlob = await coverFile.async('blob');
+                    coverImageUrl = URL.createObjectURL(imageBlob);
+                }
+            }
+        }
 
         const maxChars = 200000;
         if (fullText.length > maxChars) {
