@@ -21,7 +21,7 @@ type FileType = 'pdf' | 'epub';
 type ParseResult = {
     text: string;
     coverImageUrl: string | null;
-    metadata: Omit<FileMetadata, 'lcc' | 'bisac' | 'fieldOfStudy' | 'discipline' | 'readingLevel' | 'gunningFog'>;
+    metadata: Omit<FileMetadata, 'lcc' | 'bisac' | 'lcsh' | 'fieldOfStudy' | 'discipline' | 'readingLevel' | 'gunningFog'>;
 };
 
 const statusMessages: Record<Status, string> = {
@@ -225,7 +225,7 @@ export default function App() {
             }
         }
 
-        const metadata: Omit<FileMetadata, 'lcc' | 'bisac' | 'fieldOfStudy' | 'discipline' | 'readingLevel' | 'gunningFog'> = {
+        const metadata: Omit<FileMetadata, 'lcc' | 'bisac' | 'lcsh' | 'fieldOfStudy' | 'discipline' | 'readingLevel' | 'gunningFog'> = {
             title: info.Title || undefined,
             author: textFoundAuthor || info.Author || undefined,
             subject: info.Subject || undefined,
@@ -328,7 +328,7 @@ export default function App() {
             return values;
         };
 
-        const metadata: Omit<FileMetadata, 'lcc' | 'bisac' | 'fieldOfStudy' | 'discipline' | 'readingLevel' | 'gunningFog'> = {
+        const metadata: Omit<FileMetadata, 'lcc' | 'bisac' | 'lcsh' | 'fieldOfStudy' | 'discipline' | 'readingLevel' | 'gunningFog'> = {
             title: getDcElement('title'),
             author: getDcElement('creator'),
             subject: getDcElement('subject'),
@@ -474,6 +474,7 @@ export default function App() {
         ...extractedMetadata,
         lcc: analysis.lcc,
         bisac: analysis.bisac,
+        lcsh: analysis.lcsh,
         fieldOfStudy: analysis.fieldOfStudy,
         discipline: analysis.discipline,
         readingLevel: fleschKincaid ?? undefined,

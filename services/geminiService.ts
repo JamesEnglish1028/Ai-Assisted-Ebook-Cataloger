@@ -18,18 +18,20 @@ export interface BookAnalysis {
   summary: string;
   lcc: LccClassification[];
   bisac: string[];
+  lcsh: string[];
   fieldOfStudy: string;
   discipline: string;
 }
 
 export async function generateBookAnalysis(bookText: string): Promise<BookAnalysis> {
   const prompt = `
-    You are an expert cataloging librarian with deep knowledge of LCC and BISAC classification systems.
+    You are an expert cataloging librarian with deep knowledge of LCC, LCSH, and BISAC classification systems.
     Analyze the following text from an ebook and perform the following tasks:
     1.  Generate a compelling summary of 1-2 paragraphs for an online library catalog. The summary should capture the essence of the plot, key themes, and the overall tone of the book, enticing potential readers without revealing major spoilers.
     2.  Determine a list of the most relevant Library of Congress Classification (LCC) Subject Headings. For each heading, provide its letter designator, the main class name, and the specific sub-class name. You MUST NOT provide LCC call numbers like "PS3552.L84".
-    3.  Determine a list of the most relevant Book Industry Standards and Communications (BISAC) classification headings. For each heading, you MUST provide both the code and its full descriptive name. For example, "FIC009000 - FICTION / Fantasy / General".
-    4.  Based on the LCC and BISAC classifications you determine, identify the primary Field of Study and Discipline for this book. You must choose one value for 'fieldOfStudy' and one value for 'discipline' from the official list below.
+    3.  Determine a list of the most relevant Library of Congress Subject Headings (LCSH). Each heading should be a single string with the main heading and any subdivisions separated by a double hyphen (e.g., "Fantasy fiction -- History and criticism").
+    4.  Determine a list of the most relevant Book Industry Standards and Communications (BISAC) classification headings. For each heading, you MUST provide both the code and its full descriptive name. For example, "FIC009000 - FICTION / Fantasy / General".
+    5.  Based on the LCC and BISAC classifications you determine, identify the primary Field of Study and Discipline for this book. You must choose one value for 'fieldOfStudy' and one value for 'discipline' from the official list below.
 
     Official List for Classification:
     ---
@@ -100,6 +102,11 @@ export async function generateBookAnalysis(bookText: string): Promise<BookAnalys
                 items: { type: Type.STRING },
                 description: 'A list of relevant BISAC classification headings. Each item MUST include both the code and the full name (e.g., "FIC009000 - FICTION / Fantasy / General").'
               },
+              lcsh: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING },
+                description: 'A list of relevant Library of Congress Subject Headings (LCSH). Each item should be a string with main heading and subdivisions separated by double hyphens (e.g., "Fantasy fiction -- History and criticism").'
+              },
               fieldOfStudy: {
                 type: Type.STRING,
                 description: "The primary Field of Study for the book, chosen from the provided list."
@@ -109,7 +116,7 @@ export async function generateBookAnalysis(bookText: string): Promise<BookAnalys
                 description: "The primary Discipline for the book, chosen from the provided list."
               }
             },
-            required: ['summary', 'lcc', 'bisac', 'fieldOfStudy', 'discipline']
+            required: ['summary', 'lcc', 'bisac', 'lcsh', 'fieldOfStudy', 'discipline']
           }
         }
     });
