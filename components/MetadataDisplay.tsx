@@ -23,6 +23,7 @@ export interface FileMetadata {
   };
   publisher?: string;
   publicationDate?: string;
+  epubVersion?: string;
   pageCount?: {
     value: number;
     type: 'actual' | 'estimated';
@@ -160,10 +161,11 @@ export const MetadataDisplay: React.FC<MetadataDisplayProps> = ({ metadata }) =>
     return null;
   }
 
-  const hasCoreInfo = metadata.title || metadata.author || metadata.publisher || metadata.publicationDate || metadata.identifier || metadata.pageCount || metadata.subject || metadata.keywords;
-  const hasClassificationInfo = metadata.fieldOfStudy || metadata.discipline || (metadata.lcc && metadata.lcc.length > 0) || (metadata.bisac && metadata.bisac.length > 0) || (metadata.lcsh && metadata.lcsh.length > 0);
-  const hasReadabilityInfo = metadata.readingLevel || metadata.gunningFog;
-  const hasAccessibilityInfo = metadata.certification || (metadata.accessibilityFeatures && metadata.accessibilityFeatures.length > 0) || (metadata.accessModes && metadata.accessModes.length > 0) || (metadata.accessModesSufficient && metadata.accessModesSufficient.length > 0) || (metadata.hazards && metadata.hazards.length > 0);
+  const hasCoreInfo = metadata.title || metadata.author || metadata.publisher || metadata.publicationDate || metadata.identifier || metadata.pageCount || metadata.subject || metadata.keywords || metadata.epubVersion;
+  // FIX: Coerce truthy/falsy values to actual booleans to match the 'hasContent' prop type of the Section component.
+  const hasClassificationInfo = !!(metadata.fieldOfStudy || metadata.discipline || (metadata.lcc && metadata.lcc.length > 0) || (metadata.bisac && metadata.bisac.length > 0) || (metadata.lcsh && metadata.lcsh.length > 0));
+  const hasReadabilityInfo = !!(metadata.readingLevel || metadata.gunningFog);
+  const hasAccessibilityInfo = !!(metadata.certification || (metadata.accessibilityFeatures && metadata.accessibilityFeatures.length > 0) || (metadata.accessModes && metadata.accessModes.length > 0) || (metadata.accessModesSufficient && metadata.accessModesSufficient.length > 0) || (metadata.hazards && metadata.hazards.length > 0));
 
   return (
     <div className="w-full mt-6 bg-slate-900/50 p-4 rounded-lg border border-slate-700 animate-fade-in">
@@ -175,6 +177,7 @@ export const MetadataDisplay: React.FC<MetadataDisplayProps> = ({ metadata }) =>
           {metadata.author && <MetadataItem label="Author" value={metadata.author} />}
           {metadata.publisher && <MetadataItem label="Publisher" value={metadata.publisher} />}
           {metadata.publicationDate && <MetadataItem label="Publication Date" value={metadata.publicationDate} />}
+          {metadata.epubVersion && <MetadataItem label="EPUB Version" value={metadata.epubVersion} />}
           
           {metadata.pageCount && (
             <MetadataItem 

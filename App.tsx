@@ -316,6 +316,10 @@ export default function App() {
         const opfXmlText = await opfFile.async("string");
         const opfDoc = parser.parseFromString(opfXmlText, "application/xml");
 
+        // Get EPUB version from package element
+        const packageElement = opfDoc.getElementsByTagName("package")[0];
+        const epubVersion = packageElement?.getAttribute("version") || undefined;
+
         // Extract metadata
         const getDcElement = (name: string): string | undefined => {
             const element = opfDoc.getElementsByTagName(`dc:${name}`)[0];
@@ -431,6 +435,7 @@ export default function App() {
                     return dateStr; // return original string if parsing fails
                 }
             })(),
+            epubVersion: epubVersion,
             pageCount: pageCount,
             identifier: (() => {
                 const identifiers = opfDoc.getElementsByTagName('dc:identifier');
