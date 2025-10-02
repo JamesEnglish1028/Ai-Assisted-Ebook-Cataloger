@@ -5,6 +5,7 @@ import { Loader } from './components/Loader';
 import { SummaryDisplay } from './components/SummaryDisplay';
 import { ErrorMessage } from './components/ErrorMessage';
 import { MetadataDisplay, FileMetadata } from './components/MetadataDisplay';
+import { TableOfContentsDisplay, TocItem, PageListItem } from './components/TableOfContentsDisplay';
 import { calculateFleschKincaid, calculateGunningFog } from './utils/textAnalysis';
 
 // Dynamically import libraries
@@ -24,6 +25,8 @@ type ParseResult = {
     text: string;
     coverImageUrl: string | null;
     metadata: Omit<FileMetadata, OmittedMetadata>;
+    toc?: TocItem[] | null;
+    pageList?: PageListItem[] | null;
 };
 
 const statusMessages: Record<Status, string> = {
@@ -61,6 +64,9 @@ export default function App() {
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
   const [metadata, setMetadata] = useState<FileMetadata | null>(null);
+  const [tableOfContents, setTableOfContents] = useState<TocItem[] | null>(null);
+  const [pageList, setPageList] = useState<PageListItem[] | null>(null);
+
 
   // Clean up blob URLs to prevent memory leaks
   useEffect(() => {
@@ -80,6 +86,8 @@ export default function App() {
       setSummary('');
       setCoverImageUrl(null);
       setMetadata(null);
+      setTableOfContents(null);
+      setPageList(null);
       setStatus('idle');
     }
   };
@@ -96,6 +104,8 @@ export default function App() {
             setSummary('');
             setCoverImageUrl(null);
             setMetadata(null);
+            setTableOfContents(null);
+            setPageList(null);
             setErrorMessage('');
         } else {
             setErrorMessage(`Invalid file type. Expected a ${fileType.toUpperCase()} file.`);
@@ -419,7 +429,113 @@ export default function App() {
             const estimatedPages = Math.round(fullText.length / CHARS_PER_PAGE);
             return { value: estimatedPages > 0 ? estimatedPages : 1, type: 'estimated' };
         })();
+        
+        let toc: TocItem[] | null = null;
+        let pageList: PageListItem[] | null = null;
+        try {
+            const navManifestItem = Array.from(manifestItems).find(item => item.getAttribute('properties')?.split(' ').includes('nav'));
 
+            if (navManifestItem) { // EPUB 3 Nav Document
+                const navId = navManifestItem.getAttribute('id');
+                if (navId) {
+                    const navPath = manifest.get(navId)?.href;
+                    if (navPath) {
+                        const navFile = zip.file(navPath);
+                        if (navFile) {
+                            const navHtmlText = await navFile.async('string');
+                            const navDoc = parser.parseFromString(navHtmlText, 'application/xhtml+xml');
+                            
+                            // More robustly find the TOC nav element
+                            let tocNav: Element | null = null;
+                            const navElements = navDoc.querySelectorAll('nav');
+                            for (const navEl of Array.from(navElements)) {
+                                const epubType = navEl.getAttribute('epub:type');
+                                if (epubType && epubType.toLowerCase() === 'toc') {
+                                    tocNav = navEl;
+                                    break;
+                                }
+                            }
+                            
+                            if (tocNav) {
+                                const tocOl = tocNav.querySelector('ol');
+                                if (tocOl) {
+                                    const parseNavList = (listElement: HTMLOListElement): TocItem[] => {
+                                        const items: TocItem[] = [];
+                                        const children = Array.from(listElement.children);
+                                        for (const child of children) {
+                                            if (child.tagName.toLowerCase() === 'li') {
+                                                const anchor = child.querySelector('a');
+                                                if (anchor) {
+                                                    const label = anchor.textContent?.trim() || '';
+                                                    const href = anchor.getAttribute('href') || '';
+                                                    const nestedOl = child.querySelector('ol');
+                                                    items.push({
+                                                        label,
+                                                        href,
+                                                        children: nestedOl ? parseNavList(nestedOl) : [],
+                                                    });
+                                                }
+                                            }
+                                        }
+                                        return items;
+                                    };
+                                    toc = parseNavList(tocOl);
+                                }
+                            }
+                        }
+                    }
+                }
+            } else if (ncxPath) { // EPUB 2 NCX
+                const ncxFile = zip.file(ncxPath);
+                if (ncxFile) {
+                    const ncxXmlText = await ncxFile.async("string");
+                    const ncxDoc = parser.parseFromString(ncxXmlText, "application/xml");
+                    
+                    // Parse NavMap for main TOC
+                    const navMap = ncxDoc.querySelector("navMap");
+                    if (navMap) {
+                        const parseNavPoints = (parentElement: Element): TocItem[] => {
+                            const items: TocItem[] = [];
+                            const children = Array.from(parentElement.children);
+                            for (const child of children) {
+                                if (child.tagName.toLowerCase() === 'navpoint') {
+                                    const labelEl = child.querySelector('navLabel > text');
+                                    const contentEl = child.querySelector('content');
+                                    if (labelEl && contentEl) {
+                                        const label = labelEl.textContent?.trim() || '';
+                                        const href = contentEl.getAttribute('src') || '';
+                                        items.push({
+                                            label,
+                                            href,
+                                            children: parseNavPoints(child),
+                                        });
+                                    }
+                                }
+                            }
+                            return items;
+                        };
+                        toc = parseNavPoints(navMap);
+                    }
+
+                    // Parse PageList for page numbers
+                    const pageListEl = ncxDoc.querySelector("pageList");
+                    if (pageListEl) {
+                        const pageTargets = Array.from(pageListEl.querySelectorAll("pageTarget"));
+                        const extractedPages = pageTargets.map(target => {
+                            const label = target.querySelector("navLabel > text")?.textContent?.trim() || '';
+                            const pageNumber = target.getAttribute("value") || '';
+                            return { label, pageNumber };
+                        }).filter(item => item.label && item.pageNumber);
+                        
+                        if (extractedPages.length > 0) {
+                            pageList = extractedPages;
+                        }
+                    }
+                }
+            }
+        } catch (tocError) {
+            console.warn("Could not parse Table of Contents:", tocError);
+        }
 
         const metadata: Omit<FileMetadata, OmittedMetadata> = {
             title: getDcElement('title'),
@@ -489,7 +605,7 @@ export default function App() {
           fullText = fullText.substring(0, maxChars);
         }
 
-        return { text: fullText, coverImageUrl, metadata };
+        return { text: fullText, coverImageUrl, metadata, toc, pageList };
       } catch (error: any) {
         console.error("Error parsing EPUB with JSZip:", error);
         throw new Error("Failed to parse the EPUB. The file may be corrupted, DRM-protected, or in an unsupported format.");
@@ -511,11 +627,13 @@ export default function App() {
     setErrorMessage('');
     setCoverImageUrl(null);
     setMetadata(null);
+    setTableOfContents(null);
+    setPageList(null);
     
     try {
       setStatus('parsing');
       const parser = fileType === 'pdf' ? parsePdf : parseEpub;
-      const { text: extractedText, coverImageUrl: extractedCover, metadata: extractedMetadata } = await parser(file);
+      const { text: extractedText, coverImageUrl: extractedCover, metadata: extractedMetadata, toc, pageList } = await parser(file);
 
       if (!extractedText.trim()) {
         throw new Error(`Could not extract text from the ${fileType.toUpperCase()}. The file might be image-based or empty.`);
@@ -537,6 +655,8 @@ export default function App() {
         readingLevel: fleschKincaid ?? undefined,
         gunningFog: gunningFog ?? undefined,
       });
+      setTableOfContents(toc ?? null);
+      setPageList(pageList ?? null);
       setCoverImageUrl(extractedCover);
       setStatus('success');
 
@@ -582,15 +702,19 @@ export default function App() {
               <MetadataDisplay metadata={metadata} />
             </div>
             
-            <div className="w-full md:w-2/3 min-h-[200px] bg-slate-900 rounded-lg p-6 flex items-center justify-center border border-slate-700">
-              {isLoading && <Loader message={statusMessages[status]} />}
-              {!isLoading && status === 'error' && <ErrorMessage message={errorMessage} />}
-              {!isLoading && status === 'success' && <SummaryDisplay summary={summary} coverImageUrl={coverImageUrl} />}
-              {!isLoading && (status === 'idle' && !errorMessage) && (
-                <div className="text-center text-slate-500">
-                  <p className="text-lg">Your generated analysis will appear here.</p>
-                </div>
-              )}
+            <div className="w-full md:w-2/3 flex flex-col gap-6">
+              <div className="min-h-[200px] bg-slate-900 rounded-lg p-6 flex items-center justify-center border border-slate-700">
+                {isLoading && <Loader message={statusMessages[status]} />}
+                {!isLoading && status === 'error' && <ErrorMessage message={errorMessage} />}
+                {!isLoading && status === 'success' && <SummaryDisplay summary={summary} coverImageUrl={coverImageUrl} />}
+                {!isLoading && (status === 'idle' && !errorMessage) && (
+                  <div className="text-center text-slate-500">
+                    <p className="text-lg">Your generated analysis will appear here.</p>
+                  </div>
+                )}
+              </div>
+
+              {status === 'success' && <TableOfContentsDisplay toc={tableOfContents} pageList={pageList} />}
             </div>
           </div>
         </main>
