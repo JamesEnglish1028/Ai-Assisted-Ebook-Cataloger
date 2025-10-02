@@ -6,6 +6,7 @@ import { SummaryDisplay } from './components/SummaryDisplay';
 import { ErrorMessage } from './components/ErrorMessage';
 import { MetadataDisplay, FileMetadata } from './components/MetadataDisplay';
 import { TableOfContentsDisplay, TocItem, PageListItem } from './components/TableOfContentsDisplay';
+import { ExportButton } from './components/ExportButton';
 import { calculateFleschKincaid, calculateGunningFog } from './utils/textAnalysis';
 
 // Dynamically import libraries
@@ -714,7 +715,18 @@ export default function App() {
                 )}
               </div>
 
-              {status === 'success' && <TableOfContentsDisplay toc={tableOfContents} pageList={pageList} />}
+              {status === 'success' && (
+                <>
+                  <TableOfContentsDisplay toc={tableOfContents} pageList={pageList} />
+                  <ExportButton 
+                    fileName={file?.name || 'ebook_metadata'}
+                    metadata={metadata}
+                    summary={summary}
+                    toc={tableOfContents}
+                    pageList={pageList}
+                  />
+                </>
+              )}
             </div>
           </div>
         </main>
