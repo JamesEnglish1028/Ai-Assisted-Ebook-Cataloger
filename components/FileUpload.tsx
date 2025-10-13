@@ -35,16 +35,44 @@ export const FileUpload: React.FC<FileUploadProps> = ({ file, fileType, onFileCh
   }, [file]);
 
   const handleFileSelect = useCallback((selectedFile: File | null) => {
-    onFileChange(selectedFile);
     if (selectedFile) {
+        // Validate file before accepting
+        console.log('📁 Selected file:', {
+            name: selectedFile.name,
+            size: selectedFile.size,
+            type: selectedFile.type,
+            lastModified: selectedFile.lastModified
+        });
+        
+        // Check if file size is 0 (might be a directory or invalid file)
+        if (selectedFile.size === 0) {
+            console.error('❌ File has 0 bytes - might be a directory or empty file');
+            alert('Invalid file: The selected file appears to be empty or is not a valid file.');
+            return;
+        }
+        
         setShowSuccess(true);
         // Show the success icon for 1.5s, then transition to showing the file name
         setTimeout(() => setShowSuccess(false), 1500);
     }
+    onFileChange(selectedFile);
   }, [onFileChange]);
 
   const onInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    handleFileSelect(e.target.files ? e.target.files[0] : null);
+    const selectedFile = e.target.files ? e.target.files[0] : null;
+    
+    // Firefox workaround: Validate the file is actually a file, not a directory
+    if (selectedFile) {
+      // If size is 0 and no type, it might be a directory
+      if (selectedFile.size === 0 && !selectedFile.type) {
+        console.warn('⚠️ Possible directory selected, rejecting');
+        alert('Please select a valid EPUB or PDF file, not a folder.');
+        e.target.value = '';
+        return;
+      }
+    }
+    
+    handleFileSelect(selectedFile);
     e.target.value = ''; // Allow re-uploading the same file
   };
   
@@ -99,7 +127,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ file, fileType, onFileCh
             onClick={() => onFileTypeChange('pdf')} 
             disabled={disabled}
             className={`px-4 py-1 rounded-md text-sm font-semibold transition-colors duration-200 ${fileType === 'pdf' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-700/50'}`}
-            aria-pressed={fileType === 'pdf'}
+            aria-pressed={fileType === 'pdf' ? 'true' : 'false'}
           >
             PDF
           </button>
@@ -107,7 +135,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ file, fileType, onFileCh
             onClick={() => onFileTypeChange('epub')} 
             disabled={disabled}
             className={`px-4 py-1 rounded-md text-sm font-semibold transition-colors duration-200 ${fileType === 'epub' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-700/50'}`}
-            aria-pressed={fileType === 'epub'}
+            aria-pressed={fileType === 'epub' ? 'true' : 'false'}
           >
             EPUB
           </button>

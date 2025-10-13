@@ -630,32 +630,46 @@ export default function App() {
     
     try {
       setStatus('parsing');
-      const parser = fileType === 'pdf' ? parsePdf : parseEpub;
-      const { text: extractedText, coverImageUrl: extractedCover, metadata: extractedMetadata, toc, pageList } = await parser(file);
-
-      if (!extractedText.trim()) {
-        throw new Error(`Could not extract text from the ${fileType.toUpperCase()}. The file might be image-based or empty.`);
-      }
       
-      const fleschKincaid = calculateFleschKincaid(extractedText);
-      const gunningFog = calculateGunningFog(extractedText);
+      // Debug: Log file details
+      console.log('📁 File to upload:', {
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        lastModified: file.lastModified
+      });
+      
+      // Use the API instead of local parsing
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      // Debug: Log FormData contents
+      console.log('📦 FormData created, ready to send');
       
       setStatus('summarizing');
-      const analysis = await generateBookAnalysis(extractedText);
-      setSummary(analysis.summary);
-      setMetadata({
-        ...extractedMetadata,
-        lcc: analysis.lcc,
-        bisac: analysis.bisac,
-        lcsh: analysis.lcsh,
-        fieldOfStudy: analysis.fieldOfStudy,
-        discipline: analysis.discipline,
-        readingLevel: fleschKincaid ?? undefined,
-        gunningFog: gunningFog ?? undefined,
+      
+      // Request with extractCover=true for UI
+      // Use relative path so Vite proxy can forward to the API server
+      const response = await fetch('/api/analyze-book?extractCover=true', {
+        method: 'POST',
+        body: formData
+      }).catch((error) => {
+        console.error('❌ Fetch error:', error);
+        throw new Error(`Network error: ${error.message}. This might be due to a corrupted or incompatible file format.`);
       });
-      setTableOfContents(toc ?? null);
-      setPageList(pageList ?? null);
-      setCoverImageUrl(extractedCover);
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || `Server error: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      
+      setSummary(result.summary);
+      setMetadata(result.metadata);
+      setTableOfContents(result.tableOfContents ?? null);
+      setPageList(result.pageList ?? null);
+      setCoverImageUrl(result.coverImage);
       setStatus('success');
 
     } catch (err) {

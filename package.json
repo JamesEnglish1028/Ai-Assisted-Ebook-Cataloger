@@ -1,23 +1,42 @@
 {
   "name": "ai-assisted-ebook-cataloger",
-  "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
+  "description": "AI-powered ebook cataloging tool with REST API for library classification, metadata extraction, and intelligent summaries using Google Gemini",
   "type": "module",
+  "author": "James English",
+  "license": "MIT",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "server": "node --import tsx/esm server/index.ts",
+    "server:watch": "nodemon --exec 'node --import tsx/esm' server/index.ts",
+    "server:prod": "tsx server/index.ts"
   },
   "dependencies": {
     "@google/genai": "^1.24.0",
+    "@types/pdf-parse": "^1.1.5",
+    "@xmldom/xmldom": "^0.8.11",
+    "canvas": "^3.2.0",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
     "jszip": "^3.10.1",
+    "multer": "^2.0.2",
+    "pdf-parse": "^2.3.0",
     "pdfjs-dist": "^5.4.296",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"
   },
   "devDependencies": {
-    "@types/node": "^22.14.0",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.3",
+    "@types/multer": "^2.0.0",
+    "@types/node": "^22.18.10",
     "@vitejs/plugin-react": "^5.0.0",
+    "nodemon": "^3.1.10",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.20.6",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
   }
