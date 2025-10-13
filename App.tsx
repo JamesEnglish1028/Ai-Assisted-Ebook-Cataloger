@@ -8,13 +8,11 @@ import { MetadataDisplay, FileMetadata } from './components/MetadataDisplay';
 import { TableOfContentsDisplay, TocItem, PageListItem } from './components/TableOfContentsDisplay';
 import { ExportButton } from './components/ExportButton';
 import { calculateFleschKincaid, calculateGunningFog } from './utils/textAnalysis';
+import * as pdfjsLib from 'pdfjs-dist';
+import JSZip from 'jszip';
 
-// Dynamically import libraries
-const pdfjsLib = import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.3.136/pdf.min.mjs');
-pdfjsLib.then(pdfjs => {
-  pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.3.136/pdf.worker.min.mjs`;
-});
-const jszipLib = import('https://esm.run/jszip');
+// Configure PDF.js worker
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.3.136/pdf.worker.min.mjs`;
 
 
 type Status = 'idle' | 'parsing' | 'summarizing' | 'success' | 'error';
@@ -144,9 +142,8 @@ export default function App() {
 
     const parsingPromise = (async (): Promise<ParseResult> => {
       try {
-        const pdfjs = await pdfjsLib;
         const arrayBuffer = await fileToParse.arrayBuffer();
-        const pdf = await pdfjs.getDocument(arrayBuffer).promise;
+        const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
         const numPages = pdf.numPages;
         let fullText = '';
         let coverImageUrl: string | null = null;
@@ -224,10 +221,11 @@ export default function App() {
         
         // Extract metadata from file properties as a fallback
         const { info } = await pdf.getMetadata();
+        const pdfInfo = info as any; // Type assertion for PDF metadata
 
         // --- Fallback search: Look in metadata if not found in text ---
         if (!foundIdentifier) {
-            for (const value of Object.values(info)) {
+            for (const value of Object.values(pdfInfo)) {
                 if (typeof value === 'string') {
                     const isbn = findIsbnInString(value);
                     if (isbn) {
@@ -239,12 +237,12 @@ export default function App() {
         }
 
         const metadata: Omit<FileMetadata, OmittedMetadata> = {
-            title: info.Title || undefined,
-            author: textFoundAuthor || info.Author || undefined,
-            subject: info.Subject || undefined,
-            keywords: info.Keywords || undefined,
-            publisher: textFoundPublisher || info.Producer || undefined,
-            publicationDate: parsePdfDate(info.CreationDate),
+            title: pdfInfo.Title || undefined,
+            author: textFoundAuthor || pdfInfo.Author || undefined,
+            subject: pdfInfo.Subject || undefined,
+            keywords: pdfInfo.Keywords || undefined,
+            publisher: textFoundPublisher || pdfInfo.Producer || undefined,
+            publicationDate: parsePdfDate(pdfInfo.CreationDate),
             identifier: foundIdentifier,
             pageCount: { value: numPages, type: 'actual' },
         };
@@ -259,7 +257,7 @@ export default function App() {
                 canvas.height = viewport.height;
                 canvas.width = viewport.width;
                 if (context) {
-                    await coverPage.render({ canvasContext: context, viewport: viewport }).promise;
+                    await coverPage.render({ canvasContext: context, viewport: viewport, canvas: canvas } as any).promise;
                     coverImageUrl = canvas.toDataURL('image/jpeg', 0.8);
                 }
             } catch (coverError) {
@@ -307,7 +305,6 @@ export default function App() {
 
     const parsingPromise = (async (): Promise<ParseResult> => {
       try {
-        const JSZip = (await jszipLib).default;
         const zip = await JSZip.loadAsync(fileToParse);
         let coverImageUrl: string | null = null;
         let ncxPath: string | undefined;

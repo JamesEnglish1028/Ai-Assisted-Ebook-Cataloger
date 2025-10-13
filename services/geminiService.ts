@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type } from 'https://esm.run/@google/genai';
+import { GoogleGenAI, Type } from '@google/genai';
 
 const API_KEY = process.env.API_KEY;
 
