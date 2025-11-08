@@ -27,6 +27,15 @@ An intelligent ebook analysis tool that extracts metadata, generates AI-powered 
 - PDF files (non-encrypted)
 - EPUB 2.0 and 3.0 (DRM-free)
 
+🛡️ **Production-Ready API:**
+- Rate limiting (10 analysis requests per 15 minutes per IP)
+- Input validation with detailed error messages
+- File size limits (100MB max)
+- Response caching for improved performance
+- Comprehensive error handling
+- Security headers with Helmet.js
+- GZIP compression
+
 ## Quick Start
 
 ### Prerequisites
@@ -136,6 +145,8 @@ Ai-Assisted-Ebook-Cataloger/
 - **Backend**: Express.js, Node.js
 - **AI**: Google Gemini 2.5 Flash
 - **File Processing**: pdf-parse, JSZip, @xmldom/xmldom
+- **Security**: Helmet.js, express-rate-limit, express-validator
+- **Testing**: Jest, Supertest (unit & integration tests)
 - **Type Safety**: TypeScript throughout
 
 ## Use Cases
@@ -162,7 +173,41 @@ Ai-Assisted-Ebook-Cataloger/
 | `GEMINI_API_KEY` | Your Google Gemini API key | Yes |
 | `PORT` | API server port (default: 3001) | No |
 
-## Building for Production
+## Development & Testing
+
+### Running Tests
+
+```bash
+# Run all tests
+npm test
+
+# Run tests in watch mode (for development)
+npm run test:watch
+
+# Run tests with coverage report
+npm run test:coverage
+
+# Run tests for CI/CD
+npm run test:ci
+```
+
+### Development Scripts
+
+```bash
+# Start API server with auto-reload
+npm run server:watch
+
+# Start frontend with hot reload
+npm run dev
+
+# Build frontend for production
+npm run build
+
+# Preview production build
+npm run preview
+```
+
+### Building for Production
 
 ```bash
 # Build frontend
@@ -187,11 +232,11 @@ See [COVER_EXTRACTION_UPDATE.md](./COVER_EXTRACTION_UPDATE.md) for details.
 
 ## Limitations
 
-- Maximum file size: 50MB
-- Text truncated to 200,000 characters for AI analysis
+- Maximum file size: 100MB
+- Text truncated to 200,000 characters for AI analysis (configurable via `maxTextLength` parameter)
 - DRM-protected or encrypted files are not supported
 - Requires internet connection for AI analysis
-- PDF support currently disabled (EPUB only)
+- Rate limited to prevent API abuse (10 analysis requests per 15 minutes per IP)
 
 ## Contributing
 

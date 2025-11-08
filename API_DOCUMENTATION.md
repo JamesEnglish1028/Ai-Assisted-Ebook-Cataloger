@@ -38,6 +38,18 @@ Upload and analyze an ebook file to extract metadata and generate AI analysis.
 - Body: File field named `file` containing a PDF or EPUB file
 - Query Parameters (optional):
   - `extractCover` (boolean, default: `false`) - Set to `true` to include cover image (adds ~480KB to response)
+  - `maxTextLength` (number, default: `200000`) - Maximum text length for analysis (1000-500000 characters)
+
+**Rate Limits:**
+- Analysis endpoint: 10 requests per 15 minutes per IP
+- General API: 100 requests per 15 minutes per IP
+
+**File Requirements:**
+- Supported formats: PDF, EPUB
+- Maximum file size: 100MB
+- Files must not be empty
+- PDF files must not be password-protected
+- EPUB files must not be DRM-protected
 
 **Example using curl:**
 ```bash
@@ -136,12 +148,72 @@ const result = await response.json();
 
 **Error Responses:**
 
-- `400 Bad Request` - No file uploaded or invalid file type
-- `500 Internal Server Error` - Processing error
-
+**400 Bad Request - Validation Error**
 ```json
 {
-  "error": "Error message describing what went wrong"
+  "error": "Validation failed",
+  "details": [
+    {
+      "field": "query",
+      "message": "extractCover must be a boolean value (true/false)",
+      "value": "invalid"
+    }
+  ]
+}
+```
+
+**400 Bad Request - File Required**
+```json
+{
+  "error": "No file uploaded",
+  "code": "FILE_REQUIRED",
+  "message": "Please upload a PDF or EPUB file"
+}
+```
+
+**400 Bad Request - Invalid File Type**
+```json
+{
+  "error": "Invalid file type: text/plain",
+  "code": "INVALID_FILE_TYPE",
+  "message": "Only PDF and EPUB files are supported",
+  "supportedTypes": ["application/pdf", "application/epub+zip"]
+}
+```
+
+**413 Payload Too Large**
+```json
+{
+  "error": "File too large",
+  "code": "FILE_TOO_LARGE", 
+  "message": "File size must be less than 100MB"
+}
+```
+
+**422 Unprocessable Entity - Parse Error**
+```json
+{
+  "error": "Failed to parse file",
+  "code": "PARSE_ERROR",
+  "message": "The file appears to be corrupted or password-protected",
+  "fileType": "pdf"
+}
+```
+
+**429 Too Many Requests**
+```json
+{
+  "error": "Too many analysis requests from this IP, please try again later.",
+  "retryAfter": "15 minutes"
+}
+```
+
+**503 Service Unavailable**
+```json
+{
+  "error": "AI analysis failed", 
+  "code": "AI_SERVICE_ERROR",
+  "message": "Unable to generate analysis at this time. Please try again later."
 }
 ```
 
