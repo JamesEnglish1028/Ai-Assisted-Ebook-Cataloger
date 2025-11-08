@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: ai-ebook-cataloger
+    env: node
+    plan: free
+    buildCommand: npm run render-build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: GEMINI_API_KEY
+        sync: false  # This will be set manually in Render dashboard

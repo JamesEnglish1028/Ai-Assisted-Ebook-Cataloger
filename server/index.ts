@@ -20,10 +20,16 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
 import compression from 'compression';
 import bookAnalysisRouter from './routes/bookAnalysis';
+
+// ES Module __dirname equivalent
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Load environment variables from .env file
 dotenv.config();
@@ -67,6 +73,11 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
+// Serve static files in production
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static('dist'));
+}
+
 // Routes
 app.use('/api', bookAnalysisRouter);
 
@@ -75,6 +86,13 @@ app.get('/health', (req, res) => {
   console.log('✅ Health check endpoint called');
   res.json({ status: 'ok', message: 'AI Ebook Cataloger API is running' });
 });
+
+// In production, serve the React app for all non-API routes
+if (process.env.NODE_ENV === 'production') {
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../dist/index.html'));
+  });
+}
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -85,10 +103,13 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
   });
 });
 
-const server = app.listen(PORT, '127.0.0.1', () => {
-  console.log(`🚀 API Server running on http://localhost:${PORT}`);
-  console.log(`📚 Health check: http://localhost:${PORT}/health`);
-  console.log(`📖 Analyze endpoint: http://localhost:${PORT}/api/analyze-book`);
+const server = app.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 API Server running on port ${PORT}`);
+  console.log(`📚 Health check: /health`);
+  console.log(`📖 Analyze endpoint: /api/analyze-book`);
+  if (process.env.NODE_ENV === 'production') {
+    console.log(`🌐 Frontend served from /dist`);
+  }
 });
 
 server.on('error', (err) => {
