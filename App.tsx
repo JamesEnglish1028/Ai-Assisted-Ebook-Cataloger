@@ -7,6 +7,7 @@ import { ErrorMessage } from './components/ErrorMessage';
 import { MetadataDisplay, FileMetadata } from './components/MetadataDisplay';
 import { TableOfContentsDisplay, TocItem, PageListItem } from './components/TableOfContentsDisplay';
 import { ExportButton } from './components/ExportButton';
+import AccessibilityReportDisplay from './components/AccessibilityReport';
 import { calculateFleschKincaid, calculateGunningFog } from './utils/textAnalysis';
 import * as pdfjsLib from 'pdfjs-dist';
 import JSZip from 'jszip';
@@ -16,7 +17,16 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs
 
 
 type Status = 'idle' | 'parsing' | 'summarizing' | 'success' | 'error';
+type AccessibilityStatus = 'idle' | 'analyzing' | 'success' | 'error';
 type FileType = 'pdf' | 'epub';
+
+interface AccessibilityAnalysisResult {
+  report: any; // We'll use the type from AccessibilityReport component
+  fileName: string;
+  fileType: string;
+  processedAt: string;
+  processingTime: string;
+}
 
 type OmittedMetadata = 'lcc' | 'bisac' | 'lcsh' | 'fieldOfStudy' | 'discipline' | 'readingLevel' | 'gunningFog';
 
@@ -34,6 +44,13 @@ const statusMessages: Record<Status, string> = {
   summarizing: 'Analyzing and classifying with Gemini...',
   success: 'Analysis generated!',
   error: 'An error occurred.',
+};
+
+const accessibilityStatusMessages: Record<AccessibilityStatus, string> = {
+  idle: '',
+  analyzing: 'Running accessibility analysis with DAISY Ace... This may take a moment.',
+  success: 'Accessibility analysis complete!',
+  error: 'An error occurred during accessibility analysis.',
 };
 
 // Helper function to find a valid ISBN-10 or ISBN-13 from a string.
@@ -65,6 +82,11 @@ export default function App() {
   const [metadata, setMetadata] = useState<FileMetadata | null>(null);
   const [tableOfContents, setTableOfContents] = useState<TocItem[] | null>(null);
   const [pageList, setPageList] = useState<PageListItem[] | null>(null);
+  
+  // Accessibility analysis state
+  const [accessibilityStatus, setAccessibilityStatus] = useState<AccessibilityStatus>('idle');
+  const [accessibilityResult, setAccessibilityResult] = useState<AccessibilityAnalysisResult | null>(null);
+  const [accessibilityError, setAccessibilityError] = useState<string>('');
 
 
   // Clean up blob URLs to prevent memory leaks
@@ -88,6 +110,10 @@ export default function App() {
       setTableOfContents(null);
       setPageList(null);
       setStatus('idle');
+      // Reset accessibility state
+      setAccessibilityStatus('idle');
+      setAccessibilityResult(null);
+      setAccessibilityError('');
     }
   };
 
@@ -106,6 +132,10 @@ export default function App() {
             setTableOfContents(null);
             setPageList(null);
             setErrorMessage('');
+            // Reset accessibility state
+            setAccessibilityStatus('idle');
+            setAccessibilityResult(null);
+            setAccessibilityError('');
         } else {
             setErrorMessage(`Invalid file type. Expected a ${fileType.toUpperCase()} file.`);
             setStatus('error');
@@ -680,11 +710,61 @@ export default function App() {
     }
   }, [file, fileType]);
 
+  const handleAccessibilityAnalysis = useCallback(async () => {
+    if (!file) {
+      setAccessibilityError('Please select an EPUB file for accessibility analysis.');
+      setAccessibilityStatus('error');
+      return;
+    }
+
+    // Only EPUB files are supported for accessibility analysis
+    const isEpub = file.type === 'application/epub+zip' || file.name.toLowerCase().endsWith('.epub');
+    if (!isEpub) {
+      setAccessibilityError('Only EPUB files are supported for accessibility analysis.');
+      setAccessibilityStatus('error');
+      return;
+    }
+
+    setAccessibilityError('');
+    setAccessibilityResult(null);
+    
+    try {
+      setAccessibilityStatus('analyzing');
+      
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const response = await fetch('/api/analyze-accessibility', {
+        method: 'POST',
+        body: formData
+      }).catch((error) => {
+        console.error('❌ Accessibility fetch error:', error);
+        throw new Error(`Network error: ${error.message}`);
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || `Server error: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      setAccessibilityResult(result);
+      setAccessibilityStatus('success');
+
+    } catch (err) {
+      console.error(err);
+      const message = err instanceof Error ? err.message : 'An unknown error occurred.';
+      setAccessibilityError(`Failed to analyze accessibility. ${message}`);
+      setAccessibilityStatus('error');
+    }
+  }, [file]);
+
   const isLoading = status === 'parsing' || status === 'summarizing';
+  const isAccessibilityLoading = accessibilityStatus === 'analyzing';
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col items-center p-4 sm:p-6 lg:p-8">
-      <div className="w-full max-w-4xl mx-auto">
+    <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col items-center p-2 sm:p-4 lg:p-6">
+      <div className="w-full max-w-7xl mx-auto">
         <header className="text-center mb-8">
           <h1 className="text-4xl sm:text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-cyan-400">
             AI Assisted Ebook Cataloger
@@ -694,9 +774,9 @@ export default function App() {
           </p>
         </header>
 
-        <main className="bg-slate-800/50 rounded-2xl shadow-2xl shadow-indigo-500/10 p-6 md:p-8 border border-slate-700">
-          <div className="flex flex-col md:flex-row items-start gap-6">
-            <div className="w-full md:w-1/3 flex-shrink-0">
+        <main className="bg-slate-800/50 rounded-2xl shadow-2xl shadow-indigo-500/10 p-4 md:p-6 xl:p-8 border border-slate-700">
+          <div className="flex flex-col lg:flex-row items-start gap-4 lg:gap-6">
+            <div className="w-full lg:w-1/4 xl:w-1/3 flex-shrink-0">
               <FileUpload 
                 file={file}
                 fileType={fileType}
@@ -714,8 +794,8 @@ export default function App() {
               <MetadataDisplay metadata={metadata} />
             </div>
             
-            <div className="w-full md:w-2/3 flex flex-col gap-6">
-              <div className="min-h-[200px] bg-slate-900 rounded-lg p-6 flex items-center justify-center border border-slate-700">
+            <div className="w-full lg:w-3/4 xl:w-2/3 flex flex-col gap-4 lg:gap-6">
+              <div className="min-h-[200px] bg-slate-900 rounded-lg p-4 lg:p-6 flex items-center justify-center border border-slate-700">
                 {isLoading && <Loader message={statusMessages[status]} />}
                 {!isLoading && status === 'error' && <ErrorMessage message={errorMessage} />}
                 {!isLoading && status === 'success' && <SummaryDisplay summary={summary} coverImageUrl={coverImageUrl} />}
@@ -737,6 +817,41 @@ export default function App() {
                     pageList={pageList}
                   />
                 </>
+              )}
+
+              {/* Accessibility Analysis Section */}
+              {file && file.name.toLowerCase().endsWith('.epub') && (
+                <div className="bg-slate-900 rounded-lg p-4 lg:p-6 border border-slate-700">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-slate-100">♿ Accessibility Analysis</h3>
+                    <button
+                      onClick={handleAccessibilityAnalysis}
+                      disabled={isAccessibilityLoading || isLoading}
+                      className="bg-purple-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-purple-500 disabled:bg-slate-600 disabled:cursor-not-allowed transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-purple-500"
+                    >
+                      {isAccessibilityLoading ? 'Analyzing...' : 'Check Accessibility'}
+                    </button>
+                  </div>
+                  
+                  <p className="text-slate-400 text-sm mb-4">
+                    Run DAISY Ace accessibility checker to identify potential issues and compliance with WCAG standards.
+                  </p>
+
+                  {isAccessibilityLoading && (
+                    <Loader message={accessibilityStatusMessages[accessibilityStatus]} />
+                  )}
+                  
+                  {accessibilityStatus === 'error' && (
+                    <ErrorMessage message={accessibilityError} />
+                  )}
+                  
+                  {accessibilityStatus === 'success' && accessibilityResult && (
+                    <AccessibilityReportDisplay 
+                      report={accessibilityResult.report}
+                      fileName={accessibilityResult.fileName}
+                    />
+                  )}
+                </div>
               )}
             </div>
           </div>

@@ -1,11 +1,11 @@
 import express from 'express';
 import multer from 'multer';
 import { query, validationResult } from 'express-validator';
-import { analyzeBook } from '../controllers/bookAnalysisController';
+import { analyzeBook, analyzeAccessibility } from '../controllers/bookAnalysisController';
 
 const router = express.Router();
 
-// Configure multer for file uploads (store in memory)
+// Configure multer for file uploads (store in memory) - general analysis
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
@@ -20,6 +20,25 @@ const upload = multer({
       cb(null, true);
     } else {
       const error = new Error(`Invalid file type: ${file.mimetype}. Only PDF and EPUB files are allowed.`);
+      error.name = 'ValidationError';
+      cb(error);
+    }
+  }
+});
+
+// Configure multer for accessibility analysis (EPUB only)
+const uploadEpub = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 100 * 1024 * 1024, // 100MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    const isEpub = file.mimetype === 'application/epub+zip' || file.originalname.toLowerCase().endsWith('.epub');
+    
+    if (isEpub) {
+      cb(null, true);
+    } else {
+      const error = new Error(`Invalid file type: ${file.mimetype}. Only EPUB files are allowed for accessibility analysis.`);
       error.name = 'ValidationError';
       cb(error);
     }
@@ -76,6 +95,25 @@ router.post('/analyze-book',
   handleValidationErrors,
   upload.single('file'), 
   analyzeBook
+);
+
+/**
+ * POST /api/analyze-accessibility
+ * 
+ * Analyzes an uploaded EPUB file for accessibility compliance and returns:
+ * - Accessibility violations by impact level (critical, serious, moderate, minor)
+ * - WCAG compliance information
+ * - Accessibility metadata assessment
+ * - Detailed violation reports with locations and descriptions
+ * - Reading system compatibility information
+ * 
+ * Request: multipart/form-data with 'file' field (EPUB only)
+ * Response: JSON with accessibility analysis results
+ */
+router.post('/analyze-accessibility',
+  handleValidationErrors,
+  uploadEpub.single('file'),
+  analyzeAccessibility
 );
 
 export default router;

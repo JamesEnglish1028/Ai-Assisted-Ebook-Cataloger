@@ -20,8 +20,17 @@ An intelligent ebook analysis tool that extracts metadata, generates AI-powered 
 - Reading level metrics (Flesch-Kincaid, Gunning Fog)
 - Table of contents extraction (EPUB 2 & 3 support)
 - Optional cover image extraction (Base64 encoded)
+- **NEW:** Complete accessibility analysis using DAISY Ace
 - Accessibility metadata (EPUB)
 - Page list extraction
+
+♿ **Accessibility Analysis (EPUB only):**
+- WCAG 2.1 compliance checking
+- Accessibility violations detection (critical, serious, moderate, minor)
+- Accessibility metadata extraction
+- Comprehensive accessibility reports with recommendations
+- Standards compliance assessment
+- Export functionality for detailed reports
 
 🎯 **Support for Multiple Formats:**
 - PDF files (non-encrypted)
@@ -42,6 +51,7 @@ An intelligent ebook analysis tool that extracts metadata, generates AI-powered 
 
 - Node.js 18+ 
 - A Gemini API key from [Google AI Studio](https://aistudio.google.com/app/apikey)
+- For accessibility features: DAISY Ace HTTP service (automatically installed with npm dependencies)
 
 ### Installation
 
@@ -101,12 +111,30 @@ The frontend will proxy `/api/*` requests to the backend server automatically.
 
 **Important:** Always start the backend API server before the frontend to ensure proper connectivity.
 
+#### Option 4: With Accessibility Analysis
+
+For full accessibility analysis capabilities, also run the DAISY Ace HTTP service:
+
+```bash
+# Terminal 1 - DAISY Ace HTTP Service (for accessibility analysis)
+npx ace-http -p 8000
+
+# Terminal 2 - Backend API
+npm run server
+
+# Terminal 3 - Frontend
+npm run dev
+```
+
+The accessibility analysis will automatically use the DAISY Ace service running on port 8000.
+
 ## API Integration
 
 The API is designed for integration with other applications like meBooks. See [API_DOCUMENTATION.md](./API_DOCUMENTATION.md) for complete API reference.
 
 ### Quick Example
 
+**Basic Book Analysis:**
 ```javascript
 const formData = new FormData();
 formData.append('file', ebookFile);
@@ -121,19 +149,43 @@ console.log(analysis.summary); // AI-generated summary
 console.log(analysis.metadata); // Book metadata and classifications
 ```
 
+**Accessibility Analysis (EPUB only):**
+```javascript
+const formData = new FormData();
+formData.append('file', epubFile);
+
+const response = await fetch('http://localhost:3001/api/analyze-accessibility', {
+  method: 'POST',
+  body: formData
+});
+
+const accessibilityReport = await response.json();
+console.log(accessibilityReport.outcome); // 'pass' or 'fail'
+console.log(accessibilityReport.totalViolations); // Number of issues
+console.log(accessibilityReport.violations); // Detailed violations array
+```
+
 ## Project Structure
 
 ```
 Ai-Assisted-Ebook-Cataloger/
-├── App.tsx                 # Main React application
+├── App.tsx                 # Main React application with accessibility UI
 ├── index.tsx              # React entry point
 ├── components/            # React UI components
+│   ├── AccessibilityReport.tsx  # Accessibility analysis display
+│   ├── FileUpload.tsx           # File upload component
+│   ├── MetadataDisplay.tsx      # Book metadata display
+│   └── ...                      # Other UI components
 ├── services/              # Frontend services
 ├── server/                # Backend API server
 │   ├── index.ts          # Express server
-│   ├── routes/           # API routes
+│   ├── routes/           # API routes (includes accessibility)
 │   ├── controllers/      # Request handlers
-│   └── services/         # Backend services (parsing, AI)
+│   └── services/         # Backend services (parsing, AI, accessibility)
+│       ├── accessibilityHttpService.ts  # DAISY Ace integration
+│       ├── fileParser.ts               # PDF/EPUB parsing
+│       ├── geminiService.ts            # AI analysis
+│       └── textAnalysis.ts             # Reading metrics
 ├── utils/                # Utility functions
 ├── API_DOCUMENTATION.md  # Complete API reference
 └── README.md            # This file
@@ -144,8 +196,10 @@ Ai-Assisted-Ebook-Cataloger/
 - **Frontend**: React 19, TypeScript, Vite, Tailwind CSS
 - **Backend**: Express.js, Node.js
 - **AI**: Google Gemini 2.5 Flash
+- **Accessibility**: DAISY Ace (@daisy/ace-core, @daisy/ace-axe-runner-puppeteer)
 - **File Processing**: pdf-parse, JSZip, @xmldom/xmldom
 - **Security**: Helmet.js, express-rate-limit, express-validator
+- **HTTP Client**: node-fetch, form-data (for accessibility service integration)
 - **Testing**: Jest, Supertest (unit & integration tests)
 - **Type Safety**: TypeScript throughout
 
@@ -155,16 +209,26 @@ Ai-Assisted-Ebook-Cataloger/
 - Automate metadata extraction from ebooks
 - Generate professional summaries
 - Get standardized library classifications
+- **NEW:** Accessibility compliance assessment for EPUB collections
+- Generate accessibility reports for institutional requirements
+
+### For Publishers & Content Creators
+- **NEW:** Validate EPUB accessibility before publication
+- Identify accessibility violations early in the workflow
+- Ensure WCAG 2.1 compliance for digital publications
+- Generate accessibility conformance reports
 
 ### For Personal Library Apps
 - Integrate AI-enhanced book details
 - Automatically organize books by classification
 - Provide rich metadata for user libraries
+- **NEW:** Display accessibility features and compliance levels
 
 ### For Developers
-- REST API for ebook analysis
+- REST API for ebook analysis and accessibility checking
 - Easy integration with existing applications
 - Loosely coupled microservice architecture
+- **NEW:** Comprehensive accessibility analysis API endpoints
 
 ## Environment Variables
 
@@ -232,11 +296,18 @@ See [COVER_EXTRACTION_UPDATE.md](./COVER_EXTRACTION_UPDATE.md) for details.
 
 ## Limitations
 
+### General
 - Maximum file size: 100MB
 - Text truncated to 200,000 characters for AI analysis (configurable via `maxTextLength` parameter)
 - DRM-protected or encrypted files are not supported
 - Requires internet connection for AI analysis
 - Rate limited to prevent API abuse (10 analysis requests per 15 minutes per IP)
+
+### Accessibility Analysis
+- **EPUB only:** Accessibility analysis is currently supported only for EPUB files
+- Requires DAISY Ace HTTP service running on port 8000 for full functionality
+- Analysis time varies based on EPUB complexity (typically 2-10 seconds)
+- Chromium browser required (automatically managed by Puppeteer)
 
 ## Contributing
 
