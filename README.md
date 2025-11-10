@@ -281,6 +281,20 @@ npm run build
 npm run server:prod
 ```
 
+### Production Deployment
+
+This application is ready for deployment on **Render** (recommended) or similar platforms.
+
+**Quick Deploy to Render:**
+1. Fork/clone this repository
+2. Connect to Render (free account)
+3. Set `GEMINI_API_KEY` environment variable
+4. Deploy automatically with included `render.yaml`
+
+**For detailed deployment instructions, see:** [RENDER_DEPLOYMENT.md](./RENDER_DEPLOYMENT.md)
+
+**Live Demo**: Coming soon (deploy your own instance in minutes!)
+
 ## Important Notes
 
 ### Cover Extraction

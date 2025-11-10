@@ -6,7 +6,7 @@ import os from 'os';
 import { parsePdfFile, parseEpubFile } from '../services/fileParser';
 import { generateBookAnalysis } from '../services/geminiService';
 import { calculateFleschKincaid, calculateGunningFog } from '../services/textAnalysis';
-import { AccessibilityService } from '../services/accessibilityHttpService';
+import { AccessibilityProductionService } from '../services/accessibilityProductionService';
 
 // Simple in-memory cache (in production, use Redis or similar)
 const analysisCache = new Map<string, any>();
@@ -278,11 +278,11 @@ export async function analyzeAccessibility(req: Request, res: Response, next: Ne
 
     console.log(`♿ Running accessibility analysis on: ${file.originalname}`);
 
-    // Run accessibility analysis using HTTP service
+    // Run accessibility analysis using production service
     let accessibilityReport;
     try {
-      console.log('🔧 Calling AccessibilityService.analyzeAccessibility...');
-      accessibilityReport = await AccessibilityService.analyzeAccessibility(tempEpubPath);
+      console.log('🔧 Calling AccessibilityProductionService.analyzeAccessibility...');
+      accessibilityReport = await AccessibilityProductionService.analyzeAccessibility(tempEpubPath);
       console.log('✅ Accessibility analysis completed successfully');
     } catch (accessibilityError: any) {
       console.error('❌ Accessibility analysis failed:', accessibilityError.message);

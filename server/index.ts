@@ -75,7 +75,13 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Serve static files in production
 if (process.env.NODE_ENV === 'production') {
-  app.use(express.static('dist'));
+  const distPath = path.join(__dirname, '../dist');
+  console.log(`📁 Serving static files from: ${distPath}`);
+  app.use(express.static(distPath, {
+    maxAge: '1d', // Cache static assets for 1 day
+    etag: true,
+    lastModified: true
+  }));
 }
 
 // Routes
@@ -89,8 +95,23 @@ app.get('/health', (req, res) => {
 
 // In production, serve the React app for all non-API routes
 if (process.env.NODE_ENV === 'production') {
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../dist/index.html'));
+  // Serve React app for root route
+  app.get('/', (req, res) => {
+    const indexPath = path.join(__dirname, '../dist/index.html');
+    console.log(`🌐 Serving React app from: ${indexPath}`);
+    res.sendFile(indexPath);
+  });
+  
+  // Catch all other non-API routes and serve React app
+  app.use((req, res, next) => {
+    // Skip API routes
+    if (req.path.startsWith('/api/') || req.path === '/health') {
+      return next();
+    }
+    
+    const indexPath = path.join(__dirname, '../dist/index.html');
+    console.log(`🌐 Serving React app from: ${indexPath} for route: ${req.path}`);
+    res.sendFile(indexPath);
   });
 }
 

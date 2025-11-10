@@ -12,8 +12,9 @@
     "server": "node --import tsx/esm server/index.ts",
     "server:watch": "nodemon --exec 'node --import tsx/esm' server/index.ts",
     "server:prod": "tsx server/index.ts",
-    "start": "NODE_ENV=production tsx server/index.ts",
-    "render-build": "npm install && npm run build",
+    "start": "NODE_ENV=production node --import tsx/esm server/index.ts",
+    "render-build": "npm ci && npm run build && npm run postbuild",
+    "postbuild": "echo 'Build completed successfully'",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
@@ -41,7 +42,9 @@
     "pdf-parse": "^2.3.0",
     "pdfjs-dist": "^5.4.296",
     "react": "^19.1.1",
-    "react-dom": "^19.1.1"
+    "react-dom": "^19.1.1",
+    "tsx": "^4.20.6",
+    "uuid": "^10.0.0"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
@@ -59,7 +62,6 @@
     "tailwindcss": "^4.1.17",
     "ts-jest": "^29.4.5",
     "ts-node": "^10.9.2",
-    "tsx": "^4.20.6",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
   }
