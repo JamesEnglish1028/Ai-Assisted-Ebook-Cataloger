@@ -26,6 +26,24 @@ Check if the API server is running.
 
 ---
 
+## MARC 21 Export (Web UI)
+
+The MARC 21 export is available in the web interface after analysis completes. It is not an API endpoint.
+
+**What it does:**
+- Generates a MARC 21 `.mrk` record using the extracted metadata, summary, and classifications.
+- Includes accessibility metadata using MARC field `=341` when access modes or features are available.
+
+**Prompts:**
+- `=001` local control number
+- `=003` MARC organization code
+- `=856 40$u` URL (Available online)
+
+**Preview panel:**
+- Supports collapsing, clearing, and downloading the `.mrk` file.
+
+---
+
 ### Analyze Book
 
 **POST** `/api/analyze-book`

@@ -21,6 +21,7 @@ An intelligent ebook analysis tool that extracts metadata, generates AI-powered 
 - **NEW:** Complete accessibility analysis using DAISY Ace
 - Accessibility metadata (EPUB)
 - Page list extraction
+- **NEW:** MARC 21 export (.mrk) with preview and accessibility fields
 
 ♿ **Accessibility Analysis (EPUB only):**
 - WCAG 2.1 compliance checking
@@ -209,6 +210,7 @@ Ai-Assisted-Ebook-Cataloger/
 - Get standardized library classifications
 - **NEW:** Accessibility compliance assessment for EPUB collections
 - Generate accessibility reports for institutional requirements
+- **NEW:** Generate MARC 21 records with accessibility metadata
 
 ### For Publishers & Content Creators
 - **NEW:** Validate EPUB accessibility before publication
@@ -294,6 +296,11 @@ This application is ready for deployment on **Render** (recommended) or similar 
 **Live Demo**: Coming soon (deploy your own instance in minutes!)
 
 ## Important Notes
+
+### MARC 21 Export (Web UI)
+- Generate a MARC 21 .mrk record from the UI after analysis completes.
+- The export prompts for `=001` local control number, `=003` MARC org code, and a URL for `=856`.
+- The preview panel supports collapsing, clearing, and download, and includes accessibility fields (`=341`) when available.
 
 ### Cover Extraction
 By default, the API does **not** extract cover images (for performance). To request cover extraction:
