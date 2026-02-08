@@ -1,6 +1,6 @@
 # Deployment Guide for Render
 
-This guide will help you deploy the AI Ebook Cataloger to Render.
+This guide will help you deploy the AI Ebook Cataloger to Render using separate services for the API and frontend.
 
 ## Prerequisites
 
@@ -13,20 +13,26 @@ This guide will help you deploy the AI Ebook Cataloger to Render.
 ### 1. Connect Your Repository
 
 1. Go to [Render Dashboard](https://dashboard.render.com)
-2. Click "New +" → "Web Service"
-3. Connect your GitHub repository: `JamesEnglish1028/Ai-Assisted-Ebook-Cataloger`
+2. Click "New +" → "Web Service" and connect your GitHub repository: `JamesEnglish1028/Ai-Assisted-Ebook-Cataloger`
+3. Click "New +" → "Static Site" and connect the same repository
 
-### 2. Configure the Service
+### 2. Configure the Services
 
-**Basic Settings:**
-- **Name**: `ai-ebook-cataloger`
+**API Web Service Settings:**
+- **Name**: `ai-ebook-cataloger-api`
 - **Environment**: `Node`
 - **Region**: Choose closest to your users
 - **Branch**: `main`
 
 **Build & Deploy Settings:**
-- **Build Command**: `npm run render-build`
+- **Build Command**: `npm ci`
 - **Start Command**: `npm start`
+
+**Static Site Settings:**
+- **Name**: `ai-ebook-cataloger-web`
+- **Branch**: `main`
+- **Build Command**: `npm ci && npm run build`
+- **Publish Directory**: `dist`
 
 ### 3. Set Environment Variables
 
@@ -34,29 +40,30 @@ In the Render dashboard, add these environment variables:
 
 | Key | Value | Notes |
 |-----|-------|-------|
-| `NODE_ENV` | `production` | Required |
-| `GEMINI_API_KEY` | `your_api_key_here` | Get from [Google AI Studio](https://aistudio.google.com/app/apikey) |
+| `NODE_ENV` | `production` | API service |
+| `GEMINI_API_KEY` | `your_api_key_here` | API service |
+| `VITE_API_BASE_URL` | `https://ai-ebook-cataloger-api.onrender.com` | Static site |
 
 ### 4. Deploy
 
-1. Click "Create Web Service"
+1. Click "Create Web Service" and "Create Static Site"
 2. Render will automatically:
-   - Clone your repository
-   - Install dependencies
-   - Build the frontend
-   - Start the server
+  - Clone your repository
+  - Install dependencies
+  - Build the frontend for the static site
+  - Start the API server
 
 ### 5. Access Your App
 
 Once deployed, your app will be available at:
 ```
-https://your-app-name.onrender.com
+https://your-static-site.onrender.com
 ```
 
 ## Features Available After Deployment
 
 - ✅ **Web Interface**: Upload and analyze ebooks
-- ✅ **REST API**: `https://your-app-name.onrender.com/api/analyze-book`
+- ✅ **REST API**: `https://your-api-service.onrender.com/api/analyze-book`
 - ✅ **Rate Limiting**: Production security enabled
 - ✅ **File Processing**: PDF and EPUB support
 - ✅ **AI Analysis**: Google Gemini integration

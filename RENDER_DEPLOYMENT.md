@@ -4,7 +4,7 @@ This guide provides step-by-step instructions for deploying the AI-Assisted Eboo
 
 ## Overview
 
-The application is configured as a **unified web service** that serves both the React frontend and Express.js API from a single container. This approach simplifies deployment and reduces costs.
+The application is configured as **two Render services**: a Node.js API service and a static site for the React frontend. This keeps the API secure and the frontend fast.
 
 ## Prerequisites
 
@@ -15,16 +15,13 @@ The application is configured as a **unified web service** that serves both the 
 ## Deployment Architecture
 
 ```
-┌─────────────────────────┐
-│     Render Web Service  │
-├─────────────────────────┤
-│  📦 Node.js Container   │
-│  ├─ Express Server     │
-│  │  ├─ /api/* routes   │
-│  │  └─ Static files    │
-│  ├─ Built React App    │
-│                         │
-└─────────────────────────┘
+┌─────────────────────────┐       ┌─────────────────────────┐
+│  Render Web Service     │       │   Render Static Site    │
+├─────────────────────────┤       ├─────────────────────────┤
+│  📦 Node.js API         │       │  ⚡ Vite build output   │
+│  ├─ /api/* routes       │       │  └─ dist/               │
+│  └─ /health             │       │                         │
+└─────────────────────────┘       └─────────────────────────┘
 ```
 
 ## Step 1: Repository Preparation
@@ -48,7 +45,7 @@ The application is configured as a **unified web service** that serves both the 
    }
    ```
 
-## Step 2: Create Render Web Service
+## Step 2: Create Render Services
 
 ### Option A: Using render.yaml (Recommended)
 
@@ -58,24 +55,28 @@ The application is configured as a **unified web service** that serves both the 
    - Connect your GitHub repository
    - Select the repository: `Ai-Assisted-Ebook-Cataloger`
 
-2. **Configure Service Settings:**
-   - **Name**: `ai-ebook-cataloger` (or your preferred name)
-   - **Environment**: `Node`
-   - **Plan**: `Starter` ($7/month - required for Puppeteer/Chrome)
-   - **Build Command**: `npm run render-build`
-   - **Start Command**: `npm run start`
+2. **Configure Services (from render.yaml):**
+- **API Web Service**: `ai-ebook-cataloger-api`
+- **Static Site**: `ai-ebook-cataloger-web`
 
 ### Option B: Manual Configuration
 
 If you prefer manual setup instead of render.yaml:
 
-1. **Basic Settings:**
-   ```
-   Name: ai-ebook-cataloger
-   Environment: Node
-   Build Command: npm ci && npm run build
-   Start Command: npm run start
-   ```
+1. **API Web Service:**
+```
+Name: ai-ebook-cataloger-api
+Environment: Node
+Build Command: npm ci
+Start Command: npm run start
+```
+
+2. **Static Site:**
+```
+Name: ai-ebook-cataloger-web
+Build Command: npm ci && npm run build
+Publish Directory: dist
+```
 
 2. **Advanced Settings:**
    ```
@@ -88,7 +89,7 @@ If you prefer manual setup instead of render.yaml:
 
 Set these environment variables in the Render dashboard:
 
-### Required Variables
+### API Service Variables
 ```bash
 # Essential - Get from Google AI Studio
 GEMINI_API_KEY=your_actual_gemini_api_key_here
@@ -96,6 +97,13 @@ GEMINI_API_KEY=your_actual_gemini_api_key_here
 # Automatic - Set by Render
 NODE_ENV=production
 PORT=10000
+
+```
+
+### Static Site Variables
+```bash
+# Points the frontend to the API service
+VITE_API_BASE_URL=https://ai-ebook-cataloger-api.onrender.com
 
 ```
 
@@ -146,23 +154,31 @@ Your `render.yaml` should look like this:
 
 ```yaml
 services:
-  - type: web
-    name: ai-ebook-cataloger
-    env: node
-    plan: starter
-    buildCommand: npm run render-build
-    startCommand: npm run start
-    healthCheckPath: /health
-    region: oregon
-    numInstances: 1
-    maxMemoryGB: 2
-    envVars:
-      - key: NODE_ENV
-        value: production
-      - key: GEMINI_API_KEY
-        sync: false
-      - key: PORT
-        value: "10000"
+   - type: web
+      name: ai-ebook-cataloger-api
+      env: node
+      plan: starter
+      buildCommand: npm ci
+      startCommand: npm run start
+      healthCheckPath: /health
+      region: oregon
+      numInstances: 1
+      maxMemoryGB: 2
+      envVars:
+         - key: NODE_ENV
+            value: production
+         - key: GEMINI_API_KEY
+            sync: false
+         - key: PORT
+            value: "10000"
+
+staticSites:
+   - name: ai-ebook-cataloger-web
+      buildCommand: npm ci && npm run build
+      staticPublishPath: dist
+      envVars:
+         - key: VITE_API_BASE_URL
+            sync: false
 ```
 
 ## Troubleshooting

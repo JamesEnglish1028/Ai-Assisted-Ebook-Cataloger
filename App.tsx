@@ -651,8 +651,9 @@ export default function App() {
       setStatus('summarizing');
       
       // Request with extractCover=true for UI
-      // Use relative path so Vite proxy can forward to the API server
-      const response = await fetch('/api/analyze-book?extractCover=true', {
+      // Use env override in production, fall back to Vite proxy in dev
+      const apiBase = import.meta.env.VITE_API_BASE_URL || '';
+      const response = await fetch(`${apiBase}/api/analyze-book?extractCover=true`, {
         method: 'POST',
         body: formData
       }).catch((error) => {

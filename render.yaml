@@ -1,19 +1,26 @@
 services:
   - type: web
-    name: ai-ebook-cataloger
+    name: ai-ebook-cataloger-api
     env: node
-    plan: starter  # Upgraded from free for better performance and Puppeteer support
-    buildCommand: npm run render-build
+    plan: starter
+    buildCommand: npm ci
     startCommand: npm run start
     healthCheckPath: /health
-    region: oregon  # Choose region closest to your users
+    region: oregon
     numInstances: 1
     maxMemoryGB: 2
     envVars:
       - key: NODE_ENV
         value: production
       - key: GEMINI_API_KEY
-        sync: false  # Set manually in Render dashboard
+        sync: false
       - key: PORT
-        value: "10000"  # Render's default port
-    
+        value: "10000"
+
+staticSites:
+  - name: ai-ebook-cataloger-web
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_BASE_URL
+        sync: false

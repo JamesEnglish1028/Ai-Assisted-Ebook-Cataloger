@@ -233,9 +233,10 @@ This application is ready for deployment on **Render** (recommended) or similar 
 
 **Quick Deploy to Render:**
 1. Fork/clone this repository
-2. Connect to Render (free account)
-3. Set `GEMINI_API_KEY` environment variable
-4. Deploy automatically with included `render.yaml`
+2. Connect the repo to Render for both a Web Service (API) and a Static Site (frontend)
+3. Set `GEMINI_API_KEY` on the API service
+4. Set `VITE_API_BASE_URL` on the static site (pointing to the API URL)
+5. Deploy automatically with included `render.yaml`
 
 **For detailed deployment instructions, see:** [RENDER_DEPLOYMENT.md](./RENDER_DEPLOYMENT.md)
 
