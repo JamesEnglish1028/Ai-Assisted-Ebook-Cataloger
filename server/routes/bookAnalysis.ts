@@ -1,7 +1,7 @@
 import express from 'express';
 import multer from 'multer';
 import { query, validationResult } from 'express-validator';
-import { analyzeBook, analyzeAccessibility } from '../controllers/bookAnalysisController';
+import { analyzeBook } from '../controllers/bookAnalysisController';
 
 const router = express.Router();
 
@@ -26,24 +26,6 @@ const upload = multer({
   }
 });
 
-// Configure multer for accessibility analysis (EPUB only)
-const uploadEpub = multer({
-  storage: multer.memoryStorage(),
-  limits: {
-    fileSize: 100 * 1024 * 1024, // 100MB limit
-  },
-  fileFilter: (req, file, cb) => {
-    const isEpub = file.mimetype === 'application/epub+zip' || file.originalname.toLowerCase().endsWith('.epub');
-    
-    if (isEpub) {
-      cb(null, true);
-    } else {
-      const error = new Error(`Invalid file type: ${file.mimetype}. Only EPUB files are allowed for accessibility analysis.`);
-      error.name = 'ValidationError';
-      cb(error);
-    }
-  }
-});
 
 // Validation middleware for query parameters
 const validateAnalyzeBookQuery = [
@@ -97,23 +79,16 @@ router.post('/analyze-book',
   analyzeBook
 );
 
-/**
- * POST /api/analyze-accessibility
- * 
- * Analyzes an uploaded EPUB file for accessibility compliance and returns:
- * - Accessibility violations by impact level (critical, serious, moderate, minor)
- * - WCAG compliance information
- * - Accessibility metadata assessment
- * - Detailed violation reports with locations and descriptions
- * - Reading system compatibility information
- * 
- * Request: multipart/form-data with 'file' field (EPUB only)
- * Response: JSON with accessibility analysis results
- */
-router.post('/analyze-accessibility',
-  handleValidationErrors,
-  uploadEpub.single('file'),
-  analyzeAccessibility
-);
+// Multer and file validation error handler
+router.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (err instanceof multer.MulterError || err?.name === 'ValidationError') {
+    return res.status(400).json({
+      error: err.message || 'File upload validation failed',
+      code: 'FILE_VALIDATION_ERROR',
+      message: err.message || 'File upload validation failed'
+    });
+  }
+  return next(err);
+});
 
 export default router;

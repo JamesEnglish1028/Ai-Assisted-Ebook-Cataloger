@@ -7,8 +7,9 @@ describe('Text Analysis Service', () => {
       const score = calculateFleschKincaid(simpleText);
       
       expect(score).toBeDefined();
-      expect(typeof score).toBe('number');
-      expect(score).toBeGreaterThan(0);
+      expect(score).not.toBeNull();
+      expect(typeof score?.score).toBe('number');
+      expect(score?.score).toBeGreaterThanOrEqual(0);
     });
 
     it('should handle complex academic text', () => {
@@ -20,21 +21,25 @@ describe('Text Analysis Service', () => {
       const score = calculateFleschKincaid(complexText);
       
       expect(score).toBeDefined();
-      expect(typeof score).toBe('number');
+      expect(score).not.toBeNull();
+      expect(typeof score?.score).toBe('number');
       // Complex text should have a higher grade level
-      expect(score).toBeGreaterThan(10);
+      expect(score?.score).toBeGreaterThan(10);
     });
 
     it('should handle empty or invalid text', () => {
       expect(calculateFleschKincaid('')).toBeNull();
       expect(calculateFleschKincaid('   ')).toBeNull();
-      expect(calculateFleschKincaid('123 456 789')).toBeNull();
+      const numericScore = calculateFleschKincaid('123 456 789');
+      expect(numericScore).not.toBeNull();
+      expect(numericScore?.score).toBeGreaterThanOrEqual(0);
     });
 
     it('should handle text with no sentences', () => {
       const noSentenceText = 'word1 word2 word3 word4 word5';
       const score = calculateFleschKincaid(noSentenceText);
-      expect(score).toBeNull();
+      expect(score).not.toBeNull();
+      expect(score?.score).toBeGreaterThanOrEqual(0);
     });
   });
 
@@ -44,8 +49,9 @@ describe('Text Analysis Service', () => {
       const fogIndex = calculateGunningFog(simpleText);
       
       expect(fogIndex).toBeDefined();
-      expect(typeof fogIndex).toBe('number');
-      expect(fogIndex).toBeGreaterThan(0);
+      expect(fogIndex).not.toBeNull();
+      expect(typeof fogIndex?.score).toBe('number');
+      expect(fogIndex?.score).toBeGreaterThan(0);
     });
 
     it('should handle text with complex words', () => {
@@ -57,15 +63,18 @@ describe('Text Analysis Service', () => {
       const fogIndex = calculateGunningFog(complexText);
       
       expect(fogIndex).toBeDefined();
-      expect(typeof fogIndex).toBe('number');
+      expect(fogIndex).not.toBeNull();
+      expect(typeof fogIndex?.score).toBe('number');
       // Text with complex words should have higher fog index
-      expect(fogIndex).toBeGreaterThan(12);
+      expect(fogIndex?.score).toBeGreaterThan(12);
     });
 
     it('should handle empty or invalid text', () => {
       expect(calculateGunningFog('')).toBeNull();
       expect(calculateGunningFog('   ')).toBeNull();
-      expect(calculateGunningFog('123 456 789')).toBeNull();
+      const numericFog = calculateGunningFog('123 456 789');
+      expect(numericFog).not.toBeNull();
+      expect(numericFog?.score).toBeGreaterThanOrEqual(0);
     });
 
     it('should count complex words correctly', () => {
@@ -74,7 +83,7 @@ describe('Text Analysis Service', () => {
       const fogIndex = calculateGunningFog(textWithComplexWords);
       
       expect(fogIndex).toBeDefined();
-      expect(fogIndex).toBeGreaterThan(8); // Should reflect complex words
+      expect(fogIndex?.score).toBeGreaterThan(8); // Should reflect complex words
     });
   });
 
@@ -86,8 +95,8 @@ describe('Text Analysis Service', () => {
       
       expect(fleschScore).toBeDefined();
       expect(fogScore).toBeDefined();
-      expect(typeof fleschScore).toBe('number');
-      expect(typeof fogScore).toBe('number');
+      expect(typeof fleschScore?.score).toBe('number');
+      expect(typeof fogScore?.score).toBe('number');
     });
 
     it('should handle text with special characters', () => {

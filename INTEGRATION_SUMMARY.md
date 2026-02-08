@@ -59,8 +59,7 @@ Returns everything meBooks needs:
 - Table of contents
 - Reading level metrics
 - Page count
-- Accessibility data
-- **NEW:** MARC 21 export (.mrk) with preview and accessibility fields (UI)
+- MARC 21 export (.mrk) with preview and accessibility fields (UI)
 
 ## Files Created
 

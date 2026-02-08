@@ -81,7 +81,7 @@ describe('Book Analysis API Integration Tests', () => {
       expect(response.body.details).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
-            field: 'query',
+            field: 'extractCover',
             message: 'extractCover must be a boolean value (true/false)'
           })
         ])

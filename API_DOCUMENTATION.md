@@ -237,129 +237,6 @@ const result = await response.json();
 
 ---
 
-### Analyze Accessibility (EPUB only)
-
-**POST** `/api/analyze-accessibility`
-
-Upload an EPUB file to analyze its accessibility compliance using DAISY Ace standards.
-
-**Prerequisites:**
-- DAISY Ace HTTP service must be running on port 8000: `npx ace-http -p 8000`
-
-**Request:**
-- Method: `POST`
-- Content-Type: `multipart/form-data`
-- Body: File field named `file` containing an EPUB file only
-
-**Rate Limits:**
-- Same as analyze-book: 10 requests per 15 minutes per IP
-
-**File Requirements:**
-- **EPUB only:** PDF files are not supported for accessibility analysis
-- Maximum file size: 100MB
-- Files must not be empty or DRM-protected
-
-**Example using curl:**
-```bash
-curl -X POST http://localhost:3001/api/analyze-accessibility \
-  -F "file=@/path/to/your/book.epub"
-```
-
-**Example using JavaScript/Fetch:**
-```javascript
-const formData = new FormData();
-formData.append('file', epubFile); // Must be EPUB
-
-const response = await fetch('http://localhost:3001/api/analyze-accessibility', {
-  method: 'POST',
-  body: formData
-});
-
-const accessibilityReport = await response.json();
-```
-
-**Response (200 OK):**
-```json
-{
-  "report": {
-    "title": "The Adventures of Sherlock Holmes",
-    "identifier": "urn:isbn:9781234567890",
-    "language": "en",
-    "publisher": "Example Publisher",
-    "published": "2024-01-01",
-    "modified": "2024-01-15",
-    "epubVersion": "3.0",
-    "outcome": "fail",
-    "totalViolations": 5,
-    "violationsByImpact": {
-      "critical": 1,
-      "serious": 2,
-      "moderate": 2,
-      "minor": 0
-    },
-    "violationsByRuleset": {
-      "wcag21aa": 3,
-      "wcag21a": 2
-    },
-    "violations": [
-      {
-        "impact": "critical",
-        "rule": "color-contrast",
-        "description": "Elements must have sufficient color contrast",
-        "location": "chapter1.xhtml",
-        "fileTitle": "Chapter 1",
-        "rulesetTags": ["wcag21aa", "wcag143"],
-        "kbUrl": "https://kb.daisy.org/publishing/docs/html/color.html",
-        "kbTitle": "Color and Contrast"
-      }
-    ],
-    "metadata": {
-      "hasAccessibilityFeatures": true,
-      "accessibilityFeatures": [
-        "alternativeText",
-        "structuralNavigation"
-      ],
-      "accessibilityHazards": [
-        "noFlashingHazard",
-        "noMotionSimulationHazard"
-      ],
-      "accessibilityAPI": ["ARIA"],
-      "accessibilitySummary": "This publication includes alternative text for images and proper heading structure.",
-      "conformsTo": ["EPUB Accessibility 1.0 - WCAG 2.0 Level AA"]
-    },
-    "generatedAt": "2024-01-01T12:00:00.000Z",
-    "aceVersion": "1.3.0"
-  },
-  "fileName": "book.epub",
-  "fileType": "epub",
-  "processedAt": "2024-01-01T12:00:00.000Z",
-  "processingTime": "4.2s"
-}
-```
-
-**Error Responses:**
-
-**400 Bad Request - EPUB Only**
-```json
-{
-  "error": "Invalid file type: application/pdf",
-  "code": "INVALID_FILE_TYPE_FOR_ACCESSIBILITY",
-  "message": "Only EPUB files are supported for accessibility analysis",
-  "supportedTypes": ["application/epub+zip"]
-}
-```
-
-**503 Service Unavailable - DAISY Ace Service**
-```json
-{
-  "error": "Accessibility analysis failed",
-  "code": "ACCESSIBILITY_ANALYSIS_ERROR",
-  "message": "DAISY Ace service is not available at http://localhost:8000. Please ensure the service is running with: npx ace-http -p 8000"
-}
-```
-
----
-
 ## Running the Server
 
 ### Development Mode (with auto-reload)
@@ -370,15 +247,6 @@ npm run server
 ### Production Mode
 ```bash
 npm run server:prod
-```
-
-### With Accessibility Analysis Support
-```bash
-# Terminal 1: Start DAISY Ace HTTP service
-npx ace-http -p 8000
-
-# Terminal 2: Start the API server
-npm run server
 ```
 
 The server will start on port `3001` by default. You can change this by setting the `PORT` environment variable.
@@ -452,51 +320,12 @@ To integrate this API with your meBooks application:
    }
    ```
 
-   **Accessibility Analysis (EPUB only):**
-   ```javascript
-   async function analyzeAccessibility(epubFile) {
-     const formData = new FormData();
-     formData.append('file', epubFile);
-     
-     try {
-       const response = await fetch('http://localhost:3001/api/analyze-accessibility', {
-         method: 'POST',
-         body: formData
-       });
-       
-       if (!response.ok) {
-         throw new Error(`API error: ${response.status}`);
-       }
-       
-       const accessibilityData = await response.json();
-       
-       return {
-         outcome: accessibilityData.report.outcome, // 'pass' or 'fail'
-         totalViolations: accessibilityData.report.totalViolations,
-         wcagLevel: accessibilityData.report.wcagCompliance?.level,
-         criticalIssues: accessibilityData.report.violationsByImpact.critical,
-         accessibilityFeatures: accessibilityData.report.metadata.accessibilityFeatures,
-         conformsTo: accessibilityData.report.metadata.conformsTo,
-         violations: accessibilityData.report.violations,
-         summary: accessibilityData.report.summary,
-         recommendations: accessibilityData.report.recommendations
-       };
-     } catch (error) {
-       console.error('Error analyzing accessibility:', error);
-       throw error;
-     }
-   }
-   ```
-
 3. **Handle the response in your meBooks UI:**
    - Display the AI-generated summary
    - Show the cover image
    - Present metadata fields
    - Display classifications for library organization
    - Show table of contents
-   - **NEW:** Display accessibility compliance status and features
-   - **NEW:** Show WCAG conformance levels
-   - **NEW:** Present accessibility violations and recommendations
 
 ---
 
@@ -520,8 +349,6 @@ To integrate this API with your meBooks application:
 - pdf-parse for PDF text extraction
 - JSZip for EPUB parsing
 - Google Gemini AI for analysis
-- **NEW:** DAISY Ace (@daisy/ace-core, @daisy/ace-axe-runner-puppeteer) for accessibility analysis
-- **NEW:** node-fetch and form-data for HTTP service integration
 
 ---
 
@@ -544,11 +371,6 @@ To integrate this API with your meBooks application:
 - Try with a smaller file
 - Check your internet connection (Gemini API requires internet)
 
-**Accessibility analysis fails:**
-- Ensure DAISY Ace HTTP service is running: `npx ace-http -p 8000`
-- Check that port 8000 is not blocked by firewall
-- Verify EPUB file is valid and not corrupted
-- Only EPUB files are supported for accessibility analysis
 
 ---
 

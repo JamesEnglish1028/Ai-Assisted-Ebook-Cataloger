@@ -16,10 +16,4 @@ services:
         sync: false  # Set manually in Render dashboard
       - key: PORT
         value: "10000"  # Render's default port
-      - key: PUPPETEER_SKIP_CHROMIUM_DOWNLOAD
-        value: "false"
-      - key: PUPPETEER_EXECUTABLE_PATH
-        value: "/usr/bin/chromium-browser"
-      - key: ACCESSIBILITY_ENABLED
-        value: "true"
-    # Render automatically installs Chrome for Puppeteer on Node.js services
+    

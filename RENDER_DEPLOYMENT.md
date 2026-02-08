@@ -23,7 +23,7 @@ The application is configured as a **unified web service** that serves both the 
 │  │  ├─ /api/* routes   │
 │  │  └─ Static files    │
 │  ├─ Built React App    │
-│  └─ DAISY Ace + Chrome │
+│                         │
 └─────────────────────────┘
 ```
 
@@ -97,12 +97,6 @@ GEMINI_API_KEY=your_actual_gemini_api_key_here
 NODE_ENV=production
 PORT=10000
 
-# Accessibility Features
-ACCESSIBILITY_ENABLED=true
-
-# Puppeteer Configuration (Render handles automatically)
-PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=false
-PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 ```
 
 ### Setting Variables in Render Dashboard
@@ -169,12 +163,6 @@ services:
         sync: false
       - key: PORT
         value: "10000"
-      - key: ACCESSIBILITY_ENABLED
-        value: "true"
-      - key: PUPPETEER_SKIP_CHROMIUM_DOWNLOAD
-        value: "false"
-      - key: PUPPETEER_EXECUTABLE_PATH
-        value: "/usr/bin/chromium-browser"
 ```
 
 ## Troubleshooting
@@ -204,11 +192,6 @@ npx tsc --noEmit
 - Verify `dist/` directory exists after build
 - Check Express static file configuration
 - Ensure build command runs `npm run build`
-
-**Problem**: Accessibility analysis fails
-- Puppeteer/Chrome issues are common on first deploy
-- Render automatically installs Chrome for Node.js services
-- Set `ACCESSIBILITY_ENABLED=false` to disable if needed
 
 ### Performance Issues
 
