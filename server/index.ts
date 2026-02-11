@@ -36,6 +36,7 @@ dotenv.config();
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
+const SERVE_STATIC = process.env.SERVE_STATIC !== 'false';
 
 // Security middleware
 app.use(helmet());
@@ -69,12 +70,33 @@ app.use(generalLimiter);
 app.use('/api/analyze-book', analysisLimiter);
 
 // CORS and body parsing
-app.use(cors());
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
+  .split(',')
+  .map(origin => origin.trim())
+  .filter(Boolean);
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow non-browser clients and same-origin requests.
+    if (!origin) {
+      return callback(null, true);
+    }
+
+    // If no explicit allowlist is configured, keep permissive behavior.
+    if (allowedOrigins.length === 0) {
+      return callback(null, true);
+    }
+
+    return allowedOrigins.includes(origin)
+      ? callback(null, true)
+      : callback(new Error('Not allowed by CORS'));
+  }
+}));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Serve static files in production
-if (process.env.NODE_ENV === 'production') {
+if (process.env.NODE_ENV === 'production' && SERVE_STATIC) {
   const distPath = path.join(__dirname, '../dist');
   console.log(`📁 Serving static files from: ${distPath}`);
   app.use(express.static(distPath, {
@@ -94,7 +116,7 @@ app.get('/health', (req, res) => {
 });
 
 // In production, serve the React app for all non-API routes
-if (process.env.NODE_ENV === 'production') {
+if (process.env.NODE_ENV === 'production' && SERVE_STATIC) {
   // Serve React app for root route
   app.get('/', (req, res) => {
     const indexPath = path.join(__dirname, '../dist/index.html');
@@ -129,7 +151,11 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`📚 Health check: /health`);
   console.log(`📖 Analyze endpoint: /api/analyze-book`);
   if (process.env.NODE_ENV === 'production') {
-    console.log(`🌐 Frontend served from /dist`);
+    if (SERVE_STATIC) {
+      console.log(`🌐 Frontend served from /dist`);
+    } else {
+      console.log('🌐 Static frontend serving disabled (SERVE_STATIC=false)');
+    }
   }
 });
 
