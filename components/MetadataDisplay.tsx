@@ -47,30 +47,31 @@ export interface FileMetadata {
 
 interface MetadataDisplayProps {
   metadata: FileMetadata | null;
+  isDark: boolean;
 }
 
-const Section: React.FC<{ title: string; children: React.ReactNode; hasContent?: boolean }> = ({ title, children, hasContent = true }) => {
+const Section: React.FC<{ title: string; children: React.ReactNode; hasContent?: boolean; isDark: boolean }> = ({ title, children, hasContent = true, isDark }) => {
   if (!hasContent) return null;
 
   return (
-    <div className="mt-6 pt-4 border-t border-slate-700">
-      <h4 className="text-base font-semibold text-cyan-400 mb-3">{title}</h4>
+    <div className={`mt-6 pt-4 border-t ${isDark ? 'border-slate-700' : 'border-slate-200'}`}>
+      <h4 className={`text-base font-semibold mb-3 ${isDark ? 'text-cyan-400' : 'text-cyan-600'}`}>{title}</h4>
       {children}
     </div>
   );
 };
 
-const MetadataItem: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value }) => (
+const MetadataItem: React.FC<{ label: string; value: React.ReactNode; isDark: boolean }> = ({ label, value, isDark }) => (
   <div>
-    <dt className="text-sm font-medium text-slate-400 truncate">{label}</dt>
-    <dd className="mt-1 text-sm text-slate-200">{value}</dd>
+    <dt className={`text-sm font-medium truncate ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{label}</dt>
+    <dd className={`mt-1 text-sm ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>{value}</dd>
   </div>
 );
 
-const MetadataListItem: React.FC<{ label: string; values: string[] }> = ({ label, values }) => (
+const MetadataListItem: React.FC<{ label: string; values: string[]; isDark: boolean }> = ({ label, values, isDark }) => (
     <div>
-      <dt className="text-sm font-medium text-slate-400">{label}</dt>
-      <dd className="mt-1 text-sm text-slate-200">
+      <dt className={`text-sm font-medium ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{label}</dt>
+      <dd className={`mt-1 text-sm ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
         <ul className="list-disc list-inside space-y-1">
           {values.map((value, index) => <li key={index}>{value}</li>)}
         </ul>
@@ -78,7 +79,7 @@ const MetadataListItem: React.FC<{ label: string; values: string[] }> = ({ label
     </div>
   );
 
-const LccDisplay: React.FC<{ classifications: LccClassification[] }> = ({ classifications }) => {
+const LccDisplay: React.FC<{ classifications: LccClassification[]; isDark: boolean }> = ({ classifications, isDark }) => {
     const grouped: { [key: string]: { mainClass: string; subClasses: string[] } } = {};
 
     classifications.forEach(c => {
@@ -92,12 +93,12 @@ const LccDisplay: React.FC<{ classifications: LccClassification[] }> = ({ classi
 
     return (
         <div>
-            <dt className="text-sm font-medium text-slate-400">LCC Headings</dt>
-            <dd className="mt-1 text-sm text-slate-200 space-y-2">
+            <dt className={`text-sm font-medium ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>LCC Headings</dt>
+            <dd className={`mt-1 text-sm space-y-2 ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
                 {Object.entries(grouped).map(([designator, data]) => (
                     <div key={designator}>
                         <p className="font-semibold flex items-center">
-                          <span className="bg-cyan-800 text-cyan-200 text-xs font-mono rounded px-1.5 py-0.5 mr-2">{designator}</span>
+                          <span className={`text-xs font-mono rounded px-1.5 py-0.5 mr-2 ${isDark ? 'bg-cyan-800 text-cyan-200' : 'bg-cyan-100 text-cyan-700'}`}>{designator}</span>
                           {data.mainClass}
                         </p>
                         <ul className="list-disc list-inside pl-4 mt-1 space-y-1">
@@ -110,13 +111,13 @@ const LccDisplay: React.FC<{ classifications: LccClassification[] }> = ({ classi
     );
 };
 
-const BisacDisplay: React.FC<{ headings: string[] }> = ({ headings }) => {
+const BisacDisplay: React.FC<{ headings: string[]; isDark: boolean }> = ({ headings, isDark }) => {
     if (!headings || headings.length === 0) return null;
 
     return (
         <div>
-            <dt className="text-sm font-medium text-slate-400">BISAC Headings</dt>
-            <dd className="mt-1 text-sm text-slate-200">
+            <dt className={`text-sm font-medium ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>BISAC Headings</dt>
+            <dd className={`mt-1 text-sm ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
                 <ul className="space-y-1.5">
                     {headings.map((heading, index) => {
                         const parts = heading.split(' - ');
@@ -128,7 +129,7 @@ const BisacDisplay: React.FC<{ headings: string[] }> = ({ headings }) => {
 
                         return (
                             <li key={index}>
-                                <span className="bg-cyan-800 text-cyan-200 text-xs font-mono rounded px-1.5 py-0.5 mr-2">{code}</span>
+                                <span className={`text-xs font-mono rounded px-1.5 py-0.5 mr-2 ${isDark ? 'bg-cyan-800 text-cyan-200' : 'bg-cyan-100 text-cyan-700'}`}>{code}</span>
                                 {description}
                             </li>
                         );
@@ -142,7 +143,8 @@ const BisacDisplay: React.FC<{ headings: string[] }> = ({ headings }) => {
 const AccessibilityListItem: React.FC<{
   property: 'accessibilityFeatures' | 'accessModes' | 'accessModesSufficient' | 'hazards';
   values: string[];
-}> = ({ property, values }) => {
+  isDark: boolean;
+}> = ({ property, values, isDark }) => {
   // Get the human-readable label for the property (e.g., "Features" for "accessibilityFeatures")
   const label = accessibilityMappings.properties[property] || property;
   
@@ -152,11 +154,11 @@ const AccessibilityListItem: React.FC<{
   // Convert the technical values to human-readable strings, falling back to original value if no mapping exists
   const mappedValues = values.map(value => (valueMap && valueMap[value]) ? valueMap[value] : value);
   
-  return <MetadataListItem label={label} values={mappedValues} />;
+  return <MetadataListItem label={label} values={mappedValues} isDark={isDark} />;
 };
 
 
-export const MetadataDisplay: React.FC<MetadataDisplayProps> = ({ metadata }) => {
+export const MetadataDisplay: React.FC<MetadataDisplayProps> = ({ metadata, isDark }) => {
   if (!metadata || Object.values(metadata).every(v => !v || (Array.isArray(v) && v.length === 0))) {
     return null;
   }
@@ -168,16 +170,16 @@ export const MetadataDisplay: React.FC<MetadataDisplayProps> = ({ metadata }) =>
   const hasAccessibilityInfo = !!(metadata.certification || (metadata.accessibilityFeatures && metadata.accessibilityFeatures.length > 0) || (metadata.accessModes && metadata.accessModes.length > 0) || (metadata.accessModesSufficient && metadata.accessModesSufficient.length > 0) || (metadata.hazards && metadata.hazards.length > 0));
 
   return (
-    <div className="w-full mt-6 bg-slate-900/50 p-4 rounded-lg border border-slate-700 animate-fade-in">
-      <h3 className="text-lg font-semibold text-cyan-400 mb-3">Book Details</h3>
+    <div className={`w-full mt-6 p-4 rounded-lg border animate-fade-in transition-colors ${isDark ? 'bg-slate-900/50 border-slate-700' : 'bg-white border-slate-200'}`}>
+      <h3 className={`text-lg font-semibold mb-3 ${isDark ? 'text-cyan-400' : 'text-cyan-600'}`}>Book Details</h3>
       
       {hasCoreInfo && (
         <dl className="space-y-4">
-          {metadata.title && <MetadataItem label="Title" value={metadata.title} />}
-          {metadata.author && <MetadataItem label="Author" value={metadata.author} />}
-          {metadata.publisher && <MetadataItem label="Publisher" value={metadata.publisher} />}
-          {metadata.publicationDate && <MetadataItem label="Publication Date" value={metadata.publicationDate} />}
-          {metadata.epubVersion && <MetadataItem label="EPUB Version" value={metadata.epubVersion} />}
+          {metadata.title && <MetadataItem label="Title" value={metadata.title} isDark={isDark} />}
+          {metadata.author && <MetadataItem label="Author" value={metadata.author} isDark={isDark} />}
+          {metadata.publisher && <MetadataItem label="Publisher" value={metadata.publisher} isDark={isDark} />}
+          {metadata.publicationDate && <MetadataItem label="Publication Date" value={metadata.publicationDate} isDark={isDark} />}
+          {metadata.epubVersion && <MetadataItem label="EPUB Version" value={metadata.epubVersion} isDark={isDark} />}
           
           {metadata.pageCount && (
             <MetadataItem 
@@ -186,9 +188,10 @@ export const MetadataDisplay: React.FC<MetadataDisplayProps> = ({ metadata }) =>
                 <>
                   {metadata.pageCount.type === 'estimated' && '~'}
                   {metadata.pageCount.value}
-                  {metadata.pageCount.type === 'estimated' && <span className="text-xs text-slate-400 ml-2">(estimated)</span>}
+                  {metadata.pageCount.type === 'estimated' && <span className={`text-xs ml-2 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>(estimated)</span>}
                 </>
-              } 
+              }
+              isDark={isDark}
             />
           )}
 
@@ -198,40 +201,41 @@ export const MetadataDisplay: React.FC<MetadataDisplayProps> = ({ metadata }) =>
                   value={
                       <>
                           {metadata.identifier.value}
-                          {metadata.identifier.source === 'text' && <span className="text-xs text-slate-400 ml-2">(from text)</span>}
+                          {metadata.identifier.source === 'text' && <span className={`text-xs ml-2 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>(from text)</span>}
                       </>
-                  } 
+                  }
+                  isDark={isDark}
               />
           )}
-          {metadata.subject && <MetadataItem label="Subject" value={metadata.subject} />}
-          {metadata.keywords && <MetadataItem label="Keywords" value={metadata.keywords} />}
+          {metadata.subject && <MetadataItem label="Subject" value={metadata.subject} isDark={isDark} />}
+          {metadata.keywords && <MetadataItem label="Keywords" value={metadata.keywords} isDark={isDark} />}
         </dl>
       )}
 
-      <Section title="Classification" hasContent={hasClassificationInfo}>
+      <Section title="Classification" hasContent={hasClassificationInfo} isDark={isDark}>
         <dl className="space-y-4">
-          {metadata.fieldOfStudy && <MetadataItem label="Field of Study" value={metadata.fieldOfStudy} />}
-          {metadata.discipline && <MetadataItem label="Discipline" value={metadata.discipline} />}
-          {metadata.lcc && metadata.lcc.length > 0 && <LccDisplay classifications={metadata.lcc} />}
-          {metadata.lcsh && metadata.lcsh.length > 0 && <MetadataListItem label="LCSH Headings" values={metadata.lcsh} />}
-          {metadata.bisac && metadata.bisac.length > 0 && <BisacDisplay headings={metadata.bisac} />}
+          {metadata.fieldOfStudy && <MetadataItem label="Field of Study" value={metadata.fieldOfStudy} isDark={isDark} />}
+          {metadata.discipline && <MetadataItem label="Discipline" value={metadata.discipline} isDark={isDark} />}
+          {metadata.lcc && metadata.lcc.length > 0 && <LccDisplay classifications={metadata.lcc} isDark={isDark} />}
+          {metadata.lcsh && metadata.lcsh.length > 0 && <MetadataListItem label="LCSH Headings" values={metadata.lcsh} isDark={isDark} />}
+          {metadata.bisac && metadata.bisac.length > 0 && <BisacDisplay headings={metadata.bisac} isDark={isDark} />}
         </dl>
       </Section>
       
-      <Section title="Readability Analysis" hasContent={hasReadabilityInfo}>
+      <Section title="Readability Analysis" hasContent={hasReadabilityInfo} isDark={isDark}>
         <dl className="space-y-4">
-          {metadata.readingLevel && <MetadataItem label="Readability (Flesch-Kincaid)" value={`${metadata.readingLevel.level} (Score: ${metadata.readingLevel.score.toFixed(1)})`} />}
-          {metadata.gunningFog && <MetadataItem label="Readability (Gunning FOG)" value={`${metadata.gunningFog.level} (Score: ${metadata.gunningFog.score.toFixed(1)})`} />}
+          {metadata.readingLevel && <MetadataItem label="Readability (Flesch-Kincaid)" value={`${metadata.readingLevel.level} (Score: ${metadata.readingLevel.score.toFixed(1)})`} isDark={isDark} />}
+          {metadata.gunningFog && <MetadataItem label="Readability (Gunning FOG)" value={`${metadata.gunningFog.level} (Score: ${metadata.gunningFog.score.toFixed(1)})`} isDark={isDark} />}
         </dl>
       </Section>
 
-      <Section title="Accessibility Details" hasContent={hasAccessibilityInfo}>
+      <Section title="Accessibility Details" hasContent={hasAccessibilityInfo} isDark={isDark}>
         <dl className="space-y-4">
-          {metadata.certification && <MetadataItem label={accessibilityMappings.properties.certification || 'Certification'} value={metadata.certification} />}
-          {metadata.accessibilityFeatures && metadata.accessibilityFeatures.length > 0 && <AccessibilityListItem property="accessibilityFeatures" values={metadata.accessibilityFeatures} />}
-          {metadata.accessModes && metadata.accessModes.length > 0 && <AccessibilityListItem property="accessModes" values={metadata.accessModes} />}
-          {metadata.accessModesSufficient && metadata.accessModesSufficient.length > 0 && <AccessibilityListItem property="accessModesSufficient" values={metadata.accessModesSufficient} />}
-          {metadata.hazards && metadata.hazards.length > 0 && <AccessibilityListItem property="hazards" values={metadata.hazards} />}
+          {metadata.certification && <MetadataItem label={accessibilityMappings.properties.certification || 'Certification'} value={metadata.certification} isDark={isDark} />}
+          {metadata.accessibilityFeatures && metadata.accessibilityFeatures.length > 0 && <AccessibilityListItem property="accessibilityFeatures" values={metadata.accessibilityFeatures} isDark={isDark} />}
+          {metadata.accessModes && metadata.accessModes.length > 0 && <AccessibilityListItem property="accessModes" values={metadata.accessModes} isDark={isDark} />}
+          {metadata.accessModesSufficient && metadata.accessModesSufficient.length > 0 && <AccessibilityListItem property="accessModesSufficient" values={metadata.accessModesSufficient} isDark={isDark} />}
+          {metadata.hazards && metadata.hazards.length > 0 && <AccessibilityListItem property="hazards" values={metadata.hazards} isDark={isDark} />}
         </dl>
       </Section>
     </div>

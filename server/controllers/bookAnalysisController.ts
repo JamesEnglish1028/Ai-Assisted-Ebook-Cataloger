@@ -68,7 +68,11 @@ export async function analyzeBook(req: Request, res: Response, next: NextFunctio
     // Generate cache key from file hash
     const fileHash = crypto.createHash('md5').update(file.buffer).digest('hex');
     const extractCover = req.query.extractCover === 'true';
-    const cacheKey = `${fileHash}_${extractCover}`;
+    const requestedMaxTextLength = typeof req.query.maxTextLength === 'string'
+      ? parseInt(req.query.maxTextLength, 10)
+      : NaN;
+    const maxTextLength = Number.isFinite(requestedMaxTextLength) ? requestedMaxTextLength : 200000;
+    const cacheKey = `${fileHash}_${extractCover}_${maxTextLength}`;
     
     // Check cache first
     const cached = analysisCache.get(cacheKey);
@@ -83,7 +87,7 @@ export async function analyzeBook(req: Request, res: Response, next: NextFunctio
 
     console.log(`📖 Processing ${isPdf ? 'PDF' : 'EPUB'}: ${file.originalname}`);
 
-    const parseOptions = { extractCover };
+    const parseOptions = { extractCover, maxTextLength };
     console.log('⚙️ Parse options:', parseOptions);
 
     // Parse the file

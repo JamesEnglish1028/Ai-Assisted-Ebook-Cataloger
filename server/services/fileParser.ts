@@ -1,5 +1,6 @@
 import JSZip from 'jszip';
 import { DOMParser } from '@xmldom/xmldom';
+import type { PDFParse as PDFParseType } from 'pdf-parse';
 
 export interface FileMetadata {
   title?: string;
@@ -37,6 +38,7 @@ export interface PageListItem {
 
 export interface ParseOptions {
   extractCover?: boolean; // Default: false for API, true for UI
+  maxTextLength?: number; // Default: 200000
 }
 
 export interface ParseResult {
@@ -83,16 +85,142 @@ const parsePdfDate = (dateStr: string | null | undefined): string | undefined =>
  * Parse a PDF file from a buffer using pdf-parse (Node.js optimized)
  */
 export async function parsePdfFile(buffer: Buffer, options: ParseOptions = {}): Promise<ParseResult> {
-  // TODO: PDF parsing temporarily disabled due to pdf-parse import issues
-  // Will implement alternative solution (pdfjs-dist or pdf-lib)
-  throw new Error('PDF parsing is temporarily unavailable. Please use EPUB files.');
+  const { extractCover = false, maxTextLength = 200000 } = options;
+  const PDF_PARSE_TIMEOUT_MS = 30000;
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(`PDF processing timed out after ${PDF_PARSE_TIMEOUT_MS / 1000} seconds.`));
+    }, PDF_PARSE_TIMEOUT_MS);
+  });
+
+  const parsingPromise = (async (): Promise<ParseResult> => {
+    let parser: PDFParseType | null = null;
+
+    try {
+      const pdfParseModule = await import('pdf-parse/node') as {
+        PDFParse: new (options: { data: Buffer }) => PDFParseType;
+      };
+      parser = new pdfParseModule.PDFParse({ data: buffer });
+
+      // Text extraction is required for downstream AI analysis.
+      // Metadata extraction is best-effort to avoid rejecting valid PDFs
+      // that have malformed/unsupported metadata sections.
+      const textResult = await parser.getText();
+      let infoResult: Awaited<ReturnType<PDFParseType['getInfo']>> | null = null;
+      try {
+        infoResult = await parser.getInfo();
+      } catch (infoError) {
+        console.warn('Could not extract PDF metadata, continuing with text only:', infoError);
+      }
+
+      let fullText = (textResult?.text || '').trim();
+      const pdfInfo = (infoResult?.info || {}) as Record<string, unknown>;
+      const totalPages = infoResult?.total || textResult?.total || 0;
+
+      let foundIdentifier: FileMetadata['identifier'] | undefined;
+
+      for (const value of Object.values(pdfInfo)) {
+        if (typeof value === 'string') {
+          const isbn = findIsbnInString(value);
+          if (isbn) {
+            foundIdentifier = { value: isbn, source: 'metadata' };
+            break;
+          }
+        }
+      }
+
+      if (!foundIdentifier && Array.isArray(textResult?.pages)) {
+        const firstPagesText = textResult.pages
+          .slice(0, 5)
+          .map(page => page.text)
+          .join(' ');
+
+        const isbnMatch = firstPagesText.match(/(?:ISBN|e-ISBN)\s*:?\s*([\d\-X]+)/i);
+        const isbn = findIsbnInString(isbnMatch?.[1] || isbnMatch?.[0]);
+        if (isbn) {
+          foundIdentifier = { value: isbn, source: 'text' };
+        }
+      }
+
+      let coverImageUrl: string | null = null;
+      if (extractCover && totalPages > 0) {
+        try {
+          const screenshot = await parser.getScreenshot({
+            first: 1,
+            imageBuffer: false,
+            imageDataUrl: true,
+            desiredWidth: 600,
+          });
+          coverImageUrl = screenshot.pages[0]?.dataUrl || null;
+        } catch (coverError) {
+          // Cover extraction is optional; parsing should still succeed without it.
+          console.warn('Could not extract PDF cover image, continuing without cover:', coverError);
+        }
+      }
+
+      if (fullText.length > maxTextLength) {
+        console.warn(`PDF text truncated to ${maxTextLength} characters.`);
+        fullText = fullText.substring(0, maxTextLength);
+      }
+
+      const metadata: FileMetadata = {
+        title: (pdfInfo.Title as string) || undefined,
+        author: (pdfInfo.Author as string) || undefined,
+        subject: (pdfInfo.Subject as string) || undefined,
+        keywords: (pdfInfo.Keywords as string) || undefined,
+        publisher: (pdfInfo.Producer as string) || undefined,
+        publicationDate: parsePdfDate(pdfInfo.CreationDate as string | undefined),
+        identifier: foundIdentifier,
+        pageCount: {
+          value: totalPages,
+          type: 'actual',
+        },
+      };
+
+      return { text: fullText, coverImageUrl, metadata, toc: null, pageList: null };
+    } catch (error: any) {
+      const rawMessage = String(error?.message || '');
+      console.error('Error parsing PDF:', rawMessage);
+
+      if (rawMessage.includes('PasswordException') || /password-protected/i.test(rawMessage)) {
+        throw new Error('Failed to parse PDF: The file is password-protected.');
+      }
+      if (
+        rawMessage.includes('InvalidPDFException') ||
+        /invalid|corrupt|malformed/i.test(rawMessage)
+      ) {
+        throw new Error('Failed to parse PDF: The file is invalid or corrupted.');
+      }
+      if (/worker/i.test(rawMessage)) {
+        throw new Error('Failed to parse PDF due to a PDF worker initialization error on the server.');
+      }
+
+      throw new Error('Failed to parse the PDF. The file may be corrupted or in an unsupported format.');
+    } finally {
+      if (parser) {
+        await parser.destroy().catch((destroyError) => {
+          console.warn('Failed to destroy PDF parser cleanly:', destroyError);
+        });
+      }
+    }
+  })();
+
+  try {
+    return await Promise.race([parsingPromise, timeoutPromise]);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
 }
 
 /**
  * Parse an EPUB file from a buffer
  */
 export async function parseEpubFile(buffer: Buffer, options: ParseOptions = {}): Promise<ParseResult> {
-  const { extractCover = false } = options; // Default false - must explicitly request
+  const { extractCover = false, maxTextLength = 200000 } = options; // Default false - must explicitly request
   const EPUB_PARSE_TIMEOUT_MS = 30000;
   
   const timeoutPromise = new Promise<never>((_, reject) => {
@@ -509,10 +637,9 @@ export async function parseEpubFile(buffer: Buffer, options: ParseOptions = {}):
         }
       }
       
-      const maxChars = 200000;
-      if (fullText.length > maxChars) {
-        console.warn(`EPUB text truncated to ${maxChars} characters.`);
-        fullText = fullText.substring(0, maxChars);
+      if (fullText.length > maxTextLength) {
+        console.warn(`EPUB text truncated to ${maxTextLength} characters.`);
+        fullText = fullText.substring(0, maxTextLength);
       }
       
       return { text: fullText, coverImageUrl, metadata, toc, pageList };

@@ -14,9 +14,10 @@ export interface TocItem {
 interface TableOfContentsDisplayProps {
   toc: TocItem[] | null;
   pageList: PageListItem[] | null;
+  isDark: boolean;
 }
 
-const TocList: React.FC<{ items: TocItem[] }> = ({ items }) => {
+const TocList: React.FC<{ items: TocItem[]; isDark: boolean }> = ({ items, isDark }) => {
   if (!items || items.length === 0) {
     return null;
   }
@@ -24,16 +25,16 @@ const TocList: React.FC<{ items: TocItem[] }> = ({ items }) => {
   return (
     <ul className="pl-5 space-y-2 list-disc list-inside">
       {items.map((item, index) => (
-        <li key={index} className="text-slate-300">
+        <li key={index} className={isDark ? 'text-slate-300' : 'text-slate-700'}>
           <span>{item.label}</span>
-          <TocList items={item.children} />
+          <TocList items={item.children} isDark={isDark} />
         </li>
       ))}
     </ul>
   );
 };
 
-export const TableOfContentsDisplay: React.FC<TableOfContentsDisplayProps> = ({ toc, pageList }) => {
+export const TableOfContentsDisplay: React.FC<TableOfContentsDisplayProps> = ({ toc, pageList, isDark }) => {
   const hasToc = toc && toc.length > 0;
   const hasPageList = pageList && pageList.length > 0;
 
@@ -43,25 +44,25 @@ export const TableOfContentsDisplay: React.FC<TableOfContentsDisplayProps> = ({ 
 
   return (
     <div className="w-full animate-fade-in">
-      <div className="bg-slate-800/50 rounded-2xl shadow-2xl shadow-indigo-500/10 p-6 md:p-8 border border-slate-700">
-        <h2 className="text-2xl font-bold mb-6 text-center text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-cyan-400">
+      <div className={`rounded-2xl shadow-2xl shadow-indigo-500/10 p-6 md:p-8 border transition-colors ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white/80 border-slate-200'}`}>
+        <h2 className={`text-2xl font-bold mb-6 text-center text-transparent bg-clip-text bg-gradient-to-r ${isDark ? 'from-indigo-400 to-cyan-400' : 'from-indigo-600 to-cyan-600'}`}>
           Contents &amp; Navigation
         </h2>
         <div className="max-h-96 overflow-y-auto pr-2 text-sm">
           {hasToc && (
             <>
-              <h3 className="text-lg font-semibold text-cyan-400 mb-2 mt-4 first:mt-0">Table of Contents</h3>
-              <TocList items={toc} />
+              <h3 className={`text-lg font-semibold mb-2 mt-4 first:mt-0 ${isDark ? 'text-cyan-400' : 'text-cyan-600'}`}>Table of Contents</h3>
+              <TocList items={toc} isDark={isDark} />
             </>
           )}
           {hasPageList && (
             <>
-              <h3 className="text-lg font-semibold text-cyan-400 mb-2 mt-4 first:mt-0">Page List</h3>
+              <h3 className={`text-lg font-semibold mb-2 mt-4 first:mt-0 ${isDark ? 'text-cyan-400' : 'text-cyan-600'}`}>Page List</h3>
               <ul className="space-y-1.5">
                 {pageList.map((item, index) => (
-                  <li key={index} className="text-slate-300 flex justify-between border-b border-slate-700/50 py-1">
+                  <li key={index} className={`flex justify-between border-b py-1 ${isDark ? 'text-slate-300 border-slate-700/50' : 'text-slate-700 border-slate-200'}`}>
                     <span>{item.label}</span>
-                    <span className="text-slate-400 font-mono">Page {item.pageNumber}</span>
+                    <span className={`font-mono ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Page {item.pageNumber}</span>
                   </li>
                 ))}
               </ul>

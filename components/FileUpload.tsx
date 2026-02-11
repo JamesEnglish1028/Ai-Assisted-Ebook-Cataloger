@@ -8,6 +8,7 @@ interface FileUploadProps {
   onFileChange: (file: File | null) => void;
   onFileTypeChange: (type: FileType) => void;
   disabled: boolean;
+  isDark: boolean;
 }
 
 const PdfIcon: React.FC = () => (
@@ -23,7 +24,7 @@ const EpubIcon: React.FC = () => (
 );
 
 
-export const FileUpload: React.FC<FileUploadProps> = ({ file, fileType, onFileChange, onFileTypeChange, disabled }) => {
+export const FileUpload: React.FC<FileUploadProps> = ({ file, fileType, onFileChange, onFileTypeChange, disabled, isDark }) => {
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [showSuccess, setShowSuccess] = useState<boolean>(false);
 
@@ -99,7 +100,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ file, fileType, onFileCh
       return (
         <div className="flex flex-col items-center justify-center animate-fade-in text-center">
           {fileType === 'pdf' ? <PdfIcon /> : <EpubIcon />}
-          <p className="mt-2 text-sm font-semibold text-slate-300">File accepted!</p>
+          <p className={`mt-2 text-sm font-semibold ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>File accepted!</p>
         </div>
       );
     }
@@ -113,7 +114,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ file, fileType, onFileCh
     return (
       <>
         <svg className="w-10 h-10 mb-3 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-4-4V6a4 4 0 014-4h1.586a1 1 0 01.707.293l1.414 1.414a1 1 0 00.707.293H13.5a4 4 0 014 4v1.586a1 1 0 01-.293.707l-1.414 1.414a1 1 0 00-.293.707V16m-7-5l3-3m0 0l3 3m-3-3v12"></path></svg>
-        <p className="mb-2 text-sm text-slate-400"><span className="font-semibold">Click to upload</span> or drag and drop</p>
+        <p className={`mb-2 text-sm ${isDark ? 'text-slate-400' : 'text-slate-600'}`}><span className="font-semibold">Click to upload</span> or drag and drop</p>
         <p className="text-xs text-slate-500">{fileType.toUpperCase()} only</p>
       </>
     );
@@ -122,11 +123,11 @@ export const FileUpload: React.FC<FileUploadProps> = ({ file, fileType, onFileCh
   return (
     <div className="w-full">
       <div className="flex justify-center mb-4">
-        <div className="bg-slate-900 p-1 rounded-lg flex gap-1 border border-slate-700">
+        <div className={`p-1 rounded-lg flex gap-1 border transition-colors ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-slate-100 border-slate-300'}`}>
           <button 
             onClick={() => onFileTypeChange('pdf')} 
             disabled={disabled}
-            className={`px-4 py-1 rounded-md text-sm font-semibold transition-colors duration-200 ${fileType === 'pdf' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-700/50'}`}
+            className={`px-4 py-1 rounded-md text-sm font-semibold transition-colors duration-200 ${fileType === 'pdf' ? 'bg-indigo-600 text-white' : (isDark ? 'text-slate-400 hover:bg-slate-700/50' : 'text-slate-700 hover:bg-slate-200')}`}
             aria-pressed={fileType === 'pdf' ? 'true' : 'false'}
           >
             PDF
@@ -134,7 +135,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ file, fileType, onFileCh
           <button 
             onClick={() => onFileTypeChange('epub')} 
             disabled={disabled}
-            className={`px-4 py-1 rounded-md text-sm font-semibold transition-colors duration-200 ${fileType === 'epub' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-700/50'}`}
+            className={`px-4 py-1 rounded-md text-sm font-semibold transition-colors duration-200 ${fileType === 'epub' ? 'bg-indigo-600 text-white' : (isDark ? 'text-slate-400 hover:bg-slate-700/50' : 'text-slate-700 hover:bg-slate-200')}`}
             aria-pressed={fileType === 'epub' ? 'true' : 'false'}
           >
             EPUB
@@ -148,13 +149,13 @@ export const FileUpload: React.FC<FileUploadProps> = ({ file, fileType, onFileCh
         onDragOver={(e) => handleDragEvents(e, true)}
         onDrop={handleDrop}
         className={`flex flex-col items-center justify-center w-full h-48 border-2 border-dashed rounded-lg cursor-pointer transition-all duration-300 ${
-          disabled ? 'bg-slate-700/50 border-slate-600 cursor-not-allowed' :
-          isDragging ? 'bg-indigo-900/50 border-indigo-400 scale-105' : 'bg-slate-800 border-slate-600 hover:bg-slate-700/50 hover:border-slate-500'
+          disabled ? (isDark ? 'bg-slate-700/50 border-slate-600 cursor-not-allowed' : 'bg-slate-200 border-slate-300 cursor-not-allowed') :
+          isDragging ? (isDark ? 'bg-indigo-900/50 border-indigo-400 scale-105' : 'bg-indigo-100 border-indigo-500 scale-105') : (isDark ? 'bg-slate-800 border-slate-600 hover:bg-slate-700/50 hover:border-slate-500' : 'bg-white border-slate-300 hover:bg-slate-100 hover:border-slate-400')
         }`}
       >
         <div className="flex flex-col items-center justify-center pt-5 pb-6 px-4 text-center h-full">
           {isDragging ? (
-            <p className="text-lg font-semibold text-indigo-300">Release to upload</p>
+            <p className={`text-lg font-semibold ${isDark ? 'text-indigo-300' : 'text-indigo-600'}`}>Release to upload</p>
           ) : (
             renderContent()
           )}

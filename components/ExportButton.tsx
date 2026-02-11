@@ -9,9 +9,10 @@ interface ExportButtonProps {
   summary: string | null;
   toc: TocItem[] | null;
   pageList: PageListItem[] | null;
+  isDark: boolean;
 }
 
-export const ExportButton: React.FC<ExportButtonProps> = ({ fileName, metadata, summary, toc, pageList }) => {
+export const ExportButton: React.FC<ExportButtonProps> = ({ fileName, metadata, summary, toc, pageList, isDark }) => {
   if (!metadata) {
     return null;
   }
@@ -308,7 +309,7 @@ export const ExportButton: React.FC<ExportButtonProps> = ({ fileName, metadata, 
       <div className="flex flex-col sm:flex-row justify-center gap-3">
         <button
           onClick={handleExport}
-          className="bg-cyan-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-cyan-500 disabled:bg-slate-600 disabled:cursor-not-allowed transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-cyan-500 shadow-lg inline-flex items-center gap-2"
+          className={`bg-cyan-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-cyan-500 disabled:cursor-not-allowed transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500 shadow-lg inline-flex items-center gap-2 ${isDark ? 'disabled:bg-slate-600 focus:ring-offset-slate-800' : 'disabled:bg-slate-400 focus:ring-offset-slate-50'}`}
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
             <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
@@ -317,7 +318,7 @@ export const ExportButton: React.FC<ExportButtonProps> = ({ fileName, metadata, 
         </button>
         <button
           onClick={handleMarcExport}
-          className="bg-emerald-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-emerald-500 disabled:bg-slate-600 disabled:cursor-not-allowed transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-emerald-500 shadow-lg inline-flex items-center gap-2"
+          className={`bg-emerald-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-emerald-500 disabled:cursor-not-allowed transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 shadow-lg inline-flex items-center gap-2 ${isDark ? 'disabled:bg-slate-600 focus:ring-offset-slate-800' : 'disabled:bg-slate-400 focus:ring-offset-slate-50'}`}
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
             <path d="M10 2a1 1 0 011 1v7h3a1 1 0 01.707 1.707l-4 4a1 1 0 01-1.414 0l-4-4A1 1 0 016 10h3V3a1 1 0 011-1z" />
@@ -328,11 +329,11 @@ export const ExportButton: React.FC<ExportButtonProps> = ({ fileName, metadata, 
       </div>
 
       {marcPreview && (
-        <div className="bg-slate-900/70 border border-slate-700 rounded-lg p-4">
+        <div className={`border rounded-lg p-4 transition-colors ${isDark ? 'bg-slate-900/70 border-slate-700' : 'bg-slate-100 border-slate-200'}`}>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <button
               onClick={() => setIsMarcPreviewOpen(prev => !prev)}
-              className="text-sm font-semibold text-emerald-300 inline-flex items-center gap-2 focus:outline-none"
+              className={`text-sm font-semibold inline-flex items-center gap-2 focus:outline-none ${isDark ? 'text-emerald-300' : 'text-emerald-700'}`}
               type="button"
             >
               <span>{isMarcPreviewOpen ? 'Hide' : 'Show'} MARC 21 Preview</span>
@@ -352,20 +353,20 @@ export const ExportButton: React.FC<ExportButtonProps> = ({ fileName, metadata, 
             <div className="flex flex-col sm:flex-row gap-2">
               <button
                 onClick={handleMarcDownload}
-                className="bg-emerald-600 text-white text-sm font-semibold py-2 px-4 rounded-md hover:bg-emerald-500 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-emerald-500"
+                className={`bg-emerald-600 text-white text-sm font-semibold py-2 px-4 rounded-md hover:bg-emerald-500 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 ${isDark ? 'focus:ring-offset-slate-800' : 'focus:ring-offset-slate-50'}`}
               >
                 Download .mrk
               </button>
               <button
                 onClick={handleClearMarcPreview}
-                className="bg-slate-700 text-white text-sm font-semibold py-2 px-4 rounded-md hover:bg-slate-600 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-slate-500"
+                className={`text-sm font-semibold py-2 px-4 rounded-md transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 ${isDark ? 'bg-slate-700 text-white hover:bg-slate-600 focus:ring-offset-slate-800' : 'bg-slate-300 text-slate-900 hover:bg-slate-400 focus:ring-offset-slate-50'}`}
               >
                 Clear Preview
               </button>
             </div>
           </div>
           {isMarcPreviewOpen && (
-            <pre className="mt-3 text-xs sm:text-sm text-slate-200 whitespace-pre-wrap break-words max-h-80 overflow-auto">
+            <pre className={`mt-3 text-xs sm:text-sm whitespace-pre-wrap break-words max-h-80 overflow-auto ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
               {marcPreview}
             </pre>
           )}

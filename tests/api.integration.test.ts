@@ -1,8 +1,18 @@
+import { jest } from '@jest/globals';
 import request from 'supertest';
 import express from 'express';
-import path from 'path';
-import fs from 'fs';
 import bookAnalysisRouter from '../server/routes/bookAnalysis';
+import { parsePdfFile } from '../server/services/fileParser';
+import { generateBookAnalysis } from '../server/services/geminiService';
+
+jest.mock('../server/services/fileParser', () => ({
+  parsePdfFile: jest.fn(),
+  parseEpubFile: jest.fn(),
+}));
+
+jest.mock('../server/services/geminiService', () => ({
+  generateBookAnalysis: jest.fn(),
+}));
 
 // Create a test app
 const createTestApp = () => {
@@ -22,9 +32,36 @@ const createTestApp = () => {
 
 describe('Book Analysis API Integration Tests', () => {
   let app: express.Application;
+  const mockParsePdfFile = parsePdfFile as jest.MockedFunction<typeof parsePdfFile>;
+  const mockGenerateBookAnalysis = generateBookAnalysis as jest.MockedFunction<typeof generateBookAnalysis>;
 
   beforeAll(() => {
     app = createTestApp();
+  });
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+
+    mockParsePdfFile.mockResolvedValue({
+      text: 'This is extracted PDF text used for testing.',
+      coverImageUrl: null,
+      metadata: {
+        title: 'Test PDF Title',
+        author: 'Test Author',
+        pageCount: { value: 1, type: 'actual' }
+      },
+      toc: null,
+      pageList: null
+    });
+
+    mockGenerateBookAnalysis.mockResolvedValue({
+      summary: 'Test summary for integration path.',
+      lcc: [],
+      bisac: [],
+      lcsh: [],
+      fieldOfStudy: 'Humanities',
+      discipline: 'Languages & Literature'
+    });
   });
 
   describe('POST /api/analyze-book', () => {
@@ -88,10 +125,6 @@ describe('Book Analysis API Integration Tests', () => {
       );
     });
 
-    // Note: We can't easily test successful file processing in unit tests
-    // without mocking the file parsing services, which would be complex.
-    // For now, we'll test the validation and error handling paths.
-    
     describe('Query parameter validation', () => {
       it('should accept valid extractCover parameter', async () => {
         const response = await request(app)
@@ -99,10 +132,17 @@ describe('Book Analysis API Integration Tests', () => {
           .attach('file', Buffer.from('fake pdf'), {
             filename: 'test.pdf',
             contentType: 'application/pdf'
-          });
-        
-        // Should pass validation (will fail later in processing, but that's expected)
-        expect(response.status).not.toBe(400);
+          })
+          .expect(200);
+
+        expect(response.body).toHaveProperty('summary');
+        expect(mockParsePdfFile).toHaveBeenCalledWith(
+          expect.any(Buffer),
+          expect.objectContaining({
+            extractCover: true,
+            maxTextLength: 200000
+          })
+        );
       });
 
       it('should accept valid maxTextLength parameter', async () => {
@@ -111,9 +151,17 @@ describe('Book Analysis API Integration Tests', () => {
           .attach('file', Buffer.from('fake pdf'), {
             filename: 'test.pdf',
             contentType: 'application/pdf'
-          });
-        
-        expect(response.status).not.toBe(400);
+          })
+          .expect(200);
+
+        expect(response.body).toHaveProperty('summary');
+        expect(mockParsePdfFile).toHaveBeenCalledWith(
+          expect.any(Buffer),
+          expect.objectContaining({
+            extractCover: false,
+            maxTextLength: 50000
+          })
+        );
       });
 
       it('should reject invalid maxTextLength parameter', async () => {
@@ -149,8 +197,49 @@ describe('Book Analysis API Integration Tests', () => {
         expect(response.status).not.toBe(413);
       });
 
-      // Note: Testing actual large files would be impractical in unit tests
-      // This would be better tested in e2e tests with real file fixtures
+      it('should return 413 for files exceeding size limit', async () => {
+        const largeContent = Buffer.alloc((100 * 1024 * 1024) + 1); // 100MB + 1 byte
+        const response = await request(app)
+          .post('/api/analyze-book')
+          .attach('file', largeContent, {
+            filename: 'too-large.pdf',
+            contentType: 'application/pdf'
+          })
+          .expect(413);
+
+        expect(response.body).toEqual({
+          error: 'File too large',
+          code: 'FILE_TOO_LARGE',
+          message: 'File size must be less than 100MB'
+        });
+      });
+    });
+
+    it('should return successful PDF analysis response', async () => {
+      const response = await request(app)
+        .post('/api/analyze-book')
+        .attach('file', Buffer.from('fake pdf payload'), {
+          filename: 'success.pdf',
+          contentType: 'application/pdf'
+        })
+        .expect(200);
+
+      expect(response.body).toEqual(
+        expect.objectContaining({
+          summary: 'Test summary for integration path.',
+          fileName: 'success.pdf',
+          fileType: 'pdf',
+          metadata: expect.objectContaining({
+            title: 'Test PDF Title',
+            author: 'Test Author',
+            fieldOfStudy: 'Humanities',
+            discipline: 'Languages & Literature'
+          })
+        })
+      );
+
+      expect(mockParsePdfFile).toHaveBeenCalledTimes(1);
+      expect(mockGenerateBookAnalysis).toHaveBeenCalledTimes(1);
     });
   });
 

@@ -82,6 +82,14 @@ router.post('/analyze-book',
 // Multer and file validation error handler
 router.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   if (err instanceof multer.MulterError || err?.name === 'ValidationError') {
+    if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({
+        error: 'File too large',
+        code: 'FILE_TOO_LARGE',
+        message: 'File size must be less than 100MB'
+      });
+    }
+
     return res.status(400).json({
       error: err.message || 'File upload validation failed',
       code: 'FILE_VALIDATION_ERROR',
