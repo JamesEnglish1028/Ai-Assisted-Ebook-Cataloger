@@ -7,6 +7,7 @@ import { ErrorMessage } from './components/ErrorMessage';
 import { MetadataDisplay, FileMetadata } from './components/MetadataDisplay';
 import { TableOfContentsDisplay, TocItem, PageListItem } from './components/TableOfContentsDisplay';
 import { ExportButton } from './components/ExportButton';
+import { HowToGuideModal } from './components/HowToGuideModal';
 import { calculateFleschKincaid, calculateGunningFog } from './utils/textAnalysis';
 import * as pdfjsLib from 'pdfjs-dist';
 import JSZip from 'jszip';
@@ -75,6 +76,7 @@ export default function App() {
   const [metadata, setMetadata] = useState<FileMetadata | null>(null);
   const [tableOfContents, setTableOfContents] = useState<TocItem[] | null>(null);
   const [pageList, setPageList] = useState<PageListItem[] | null>(null);
+  const [isGuideOpen, setIsGuideOpen] = useState<boolean>(false);
   const isDark = theme === 'dark';
 
 
@@ -719,6 +721,13 @@ export default function App() {
           <p className={`mt-4 text-lg ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
             Upload your ebook to automatically extract metadata, generate summaries, and determine classifications.
           </p>
+          <button
+            type="button"
+            onClick={() => setIsGuideOpen(true)}
+            className={`mt-3 inline-flex items-center text-sm underline underline-offset-4 transition-colors ${isDark ? 'text-cyan-300 hover:text-cyan-200' : 'text-cyan-700 hover:text-cyan-600'}`}
+          >
+            Open One-Page How-To Guide
+          </button>
         </header>
 
         <main className={`rounded-2xl shadow-2xl shadow-indigo-500/10 p-4 md:p-6 xl:p-8 border transition-colors ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white/80 border-slate-200'}`}>
@@ -776,6 +785,7 @@ export default function App() {
           <p>Powered by Google Gemini and React.</p>
         </footer>
       </div>
+      <HowToGuideModal isOpen={isGuideOpen} onClose={() => setIsGuideOpen(false)} isDark={isDark} />
     </div>
   );
 }
