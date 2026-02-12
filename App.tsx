@@ -715,7 +715,7 @@ export default function App() {
               {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
             </button>
           </div>
-          <h1 className={`text-4xl sm:text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r ${isDark ? 'from-indigo-400 to-cyan-400' : 'from-indigo-600 to-cyan-600'}`}>
+          <h1 className={`text-4xl sm:text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r ${isDark ? 'from-blue-400 to-cyan-400' : 'from-blue-600 to-cyan-600'}`}>
             AI Assisted Ebook Cataloger
           </h1>
           <p className={`mt-4 text-lg ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
@@ -730,7 +730,7 @@ export default function App() {
           </button>
         </header>
 
-        <main className={`rounded-2xl shadow-2xl shadow-indigo-500/10 p-4 md:p-6 xl:p-8 border transition-colors ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white/80 border-slate-200'}`}>
+        <main className={`rounded-2xl shadow-2xl shadow-blue-500/10 p-4 md:p-6 xl:p-8 border transition-colors ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white/80 border-slate-200'}`}>
           <div className="flex flex-col lg:flex-row items-start gap-4 lg:gap-6">
             <div className="w-full lg:w-1/4 xl:w-1/3 flex-shrink-0">
               <FileUpload 
@@ -744,7 +744,7 @@ export default function App() {
               <button
                 onClick={handleSubmit}
                 disabled={!file || isLoading}
-                className={`w-full mt-4 bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-500 disabled:cursor-not-allowed transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-lg ${isDark ? 'disabled:bg-slate-600 focus:ring-offset-2 focus:ring-offset-slate-800' : 'disabled:bg-slate-400 focus:ring-offset-2 focus:ring-offset-slate-50'}`}
+                className={`w-full mt-4 bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-500 disabled:cursor-not-allowed transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-lg ${isDark ? 'disabled:bg-slate-600 focus:ring-offset-2 focus:ring-offset-slate-800' : 'disabled:bg-slate-400 focus:ring-offset-2 focus:ring-offset-slate-50'}`}
               >
                 {isLoading ? 'Processing...' : 'Generate Analysis'}
               </button>

@@ -22,7 +22,7 @@ export const SummaryDisplay: React.FC<SummaryDisplayProps> = ({ summary, coverIm
 
   return (
     <div className="w-full animate-fade-in">
-      <h2 className={`text-2xl font-bold mb-6 text-center text-transparent bg-clip-text bg-gradient-to-r ${isDark ? 'from-indigo-400 to-cyan-400' : 'from-indigo-600 to-cyan-600'}`}>Generated Analysis</h2>
+      <h2 className={`text-2xl font-bold mb-6 text-center text-transparent bg-clip-text bg-gradient-to-r ${isDark ? 'from-blue-400 to-cyan-400' : 'from-blue-600 to-cyan-600'}`}>Generated Analysis</h2>
       
       <div className="flex flex-col items-center gap-8">
         {coverImageUrl && (

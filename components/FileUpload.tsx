@@ -127,7 +127,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ file, fileType, onFileCh
           <button 
             onClick={() => onFileTypeChange('pdf')} 
             disabled={disabled}
-            className={`px-4 py-1 rounded-md text-sm font-semibold transition-colors duration-200 ${fileType === 'pdf' ? 'bg-indigo-600 text-white' : (isDark ? 'text-slate-400 hover:bg-slate-700/50' : 'text-slate-700 hover:bg-slate-200')}`}
+            className={`px-4 py-1 rounded-md text-sm font-semibold transition-colors duration-200 ${fileType === 'pdf' ? 'bg-blue-600 text-white' : (isDark ? 'text-slate-400 hover:bg-slate-700/50' : 'text-slate-700 hover:bg-slate-200')}`}
             aria-pressed={fileType === 'pdf' ? 'true' : 'false'}
           >
             PDF
@@ -135,7 +135,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ file, fileType, onFileCh
           <button 
             onClick={() => onFileTypeChange('epub')} 
             disabled={disabled}
-            className={`px-4 py-1 rounded-md text-sm font-semibold transition-colors duration-200 ${fileType === 'epub' ? 'bg-indigo-600 text-white' : (isDark ? 'text-slate-400 hover:bg-slate-700/50' : 'text-slate-700 hover:bg-slate-200')}`}
+            className={`px-4 py-1 rounded-md text-sm font-semibold transition-colors duration-200 ${fileType === 'epub' ? 'bg-blue-600 text-white' : (isDark ? 'text-slate-400 hover:bg-slate-700/50' : 'text-slate-700 hover:bg-slate-200')}`}
             aria-pressed={fileType === 'epub' ? 'true' : 'false'}
           >
             EPUB
@@ -150,12 +150,12 @@ export const FileUpload: React.FC<FileUploadProps> = ({ file, fileType, onFileCh
         onDrop={handleDrop}
         className={`flex flex-col items-center justify-center w-full h-48 border-2 border-dashed rounded-lg cursor-pointer transition-all duration-300 ${
           disabled ? (isDark ? 'bg-slate-700/50 border-slate-600 cursor-not-allowed' : 'bg-slate-200 border-slate-300 cursor-not-allowed') :
-          isDragging ? (isDark ? 'bg-indigo-900/50 border-indigo-400 scale-105' : 'bg-indigo-100 border-indigo-500 scale-105') : (isDark ? 'bg-slate-800 border-slate-600 hover:bg-slate-700/50 hover:border-slate-500' : 'bg-white border-slate-300 hover:bg-slate-100 hover:border-slate-400')
+          isDragging ? (isDark ? 'bg-blue-900/50 border-blue-400 scale-105' : 'bg-blue-100 border-blue-500 scale-105') : (isDark ? 'bg-slate-800 border-slate-600 hover:bg-slate-700/50 hover:border-slate-500' : 'bg-white border-slate-300 hover:bg-slate-100 hover:border-slate-400')
         }`}
       >
         <div className="flex flex-col items-center justify-center pt-5 pb-6 px-4 text-center h-full">
           {isDragging ? (
-            <p className={`text-lg font-semibold ${isDark ? 'text-indigo-300' : 'text-indigo-600'}`}>Release to upload</p>
+            <p className={`text-lg font-semibold ${isDark ? 'text-blue-300' : 'text-blue-600'}`}>Release to upload</p>
           ) : (
             renderContent()
           )}

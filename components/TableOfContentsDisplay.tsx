@@ -44,8 +44,8 @@ export const TableOfContentsDisplay: React.FC<TableOfContentsDisplayProps> = ({ 
 
   return (
     <div className="w-full animate-fade-in">
-      <div className={`rounded-2xl shadow-2xl shadow-indigo-500/10 p-6 md:p-8 border transition-colors ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white/80 border-slate-200'}`}>
-        <h2 className={`text-2xl font-bold mb-6 text-center text-transparent bg-clip-text bg-gradient-to-r ${isDark ? 'from-indigo-400 to-cyan-400' : 'from-indigo-600 to-cyan-600'}`}>
+      <div className={`rounded-2xl shadow-2xl shadow-blue-500/10 p-6 md:p-8 border transition-colors ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white/80 border-slate-200'}`}>
+        <h2 className={`text-2xl font-bold mb-6 text-center text-transparent bg-clip-text bg-gradient-to-r ${isDark ? 'from-blue-400 to-cyan-400' : 'from-blue-600 to-cyan-600'}`}>
           Contents &amp; Navigation
         </h2>
         <div className="max-h-96 overflow-y-auto pr-2 text-sm">
