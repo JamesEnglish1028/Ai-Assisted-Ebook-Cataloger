@@ -1,5 +1,4 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { generateBookAnalysis, BookAnalysis } from './services/geminiService';
 import { FileUpload } from './components/FileUpload';
 import { Loader } from './components/Loader';
 import { SummaryDisplay } from './components/SummaryDisplay';
@@ -19,6 +18,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs
 type Status = 'idle' | 'parsing' | 'summarizing' | 'success' | 'error';
 type FileType = 'pdf' | 'epub';
 type Theme = 'light' | 'dark';
+type AIProvider = 'google' | 'openai' | 'anthropic';
 
 type OmittedMetadata = 'lcc' | 'bisac' | 'lcsh' | 'fieldOfStudy' | 'discipline' | 'readingLevel' | 'gunningFog';
 
@@ -33,9 +33,21 @@ type ParseResult = {
 const statusMessages: Record<Status, string> = {
   idle: '',
   parsing: 'Parsing your ebook... This may take a moment for large files.',
-  summarizing: 'Analyzing and classifying with Gemini...',
+  summarizing: 'Analyzing and classifying with AI...',
   success: 'Analysis generated!',
   error: 'An error occurred.',
+};
+
+const AI_PROVIDER_OPTIONS: Array<{ value: AIProvider; label: string }> = [
+  { value: 'google', label: 'Google (Gemini)' },
+  { value: 'openai', label: 'OpenAI' },
+  { value: 'anthropic', label: 'Anthropic (Claude)' },
+];
+
+const AI_MODEL_OPTIONS: Record<AIProvider, string[]> = {
+  google: ['gemini-2.5-flash', 'gemini-2.5-pro'],
+  openai: ['gpt-4.1-mini', 'gpt-4.1', 'gpt-4o-mini'],
+  anthropic: ['claude-3-5-haiku-latest', 'claude-3-7-sonnet-latest'],
 };
 
 
@@ -69,6 +81,8 @@ export default function App() {
   });
   const [file, setFile] = useState<File | null>(null);
   const [fileType, setFileType] = useState<FileType>('pdf');
+  const [aiProvider, setAiProvider] = useState<AIProvider>('google');
+  const [aiModel, setAiModel] = useState<string>(AI_MODEL_OPTIONS.google[0]);
   const [status, setStatus] = useState<Status>('idle');
   const [summary, setSummary] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string>('');
@@ -93,6 +107,13 @@ export default function App() {
       }
     };
   }, [coverImageUrl]);
+
+  useEffect(() => {
+    const models = AI_MODEL_OPTIONS[aiProvider];
+    if (!models.includes(aiModel)) {
+      setAiModel(models[0]);
+    }
+  }, [aiProvider, aiModel]);
 
 
   const handleFileTypeChange = (newType: FileType) => {
@@ -660,6 +681,8 @@ export default function App() {
       // Use the API instead of local parsing
       const formData = new FormData();
       formData.append('file', file);
+      formData.append('aiProvider', aiProvider);
+      formData.append('aiModel', aiModel);
       
       // Debug: Log FormData contents
       console.log('📦 FormData created, ready to send');
@@ -697,7 +720,7 @@ export default function App() {
       setErrorMessage(`Failed to generate analysis. ${message}`);
       setStatus('error');
     }
-  }, [file, fileType]);
+  }, [file, fileType, aiProvider, aiModel]);
 
   const isLoading = status === 'parsing' || status === 'summarizing';
 
@@ -741,6 +764,40 @@ export default function App() {
                 disabled={isLoading}
                 isDark={isDark}
               />
+              <div className={`mt-4 space-y-3 rounded-lg border p-3 ${isDark ? 'border-slate-700 bg-slate-900/60' : 'border-slate-200 bg-slate-50'}`}>
+                <div>
+                  <label htmlFor="ai-provider" className={`block text-xs font-semibold mb-1 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                    AI Provider
+                  </label>
+                  <select
+                    id="ai-provider"
+                    value={aiProvider}
+                    onChange={(event) => setAiProvider(event.target.value as AIProvider)}
+                    disabled={isLoading}
+                    className={`w-full rounded-md border px-3 py-2 text-sm ${isDark ? 'bg-slate-800 border-slate-600 text-slate-100' : 'bg-white border-slate-300 text-slate-900'}`}
+                  >
+                    {AI_PROVIDER_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="ai-model" className={`block text-xs font-semibold mb-1 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                    Model
+                  </label>
+                  <select
+                    id="ai-model"
+                    value={aiModel}
+                    onChange={(event) => setAiModel(event.target.value)}
+                    disabled={isLoading}
+                    className={`w-full rounded-md border px-3 py-2 text-sm ${isDark ? 'bg-slate-800 border-slate-600 text-slate-100' : 'bg-white border-slate-300 text-slate-900'}`}
+                  >
+                    {AI_MODEL_OPTIONS[aiProvider].map((modelOption) => (
+                      <option key={modelOption} value={modelOption}>{modelOption}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
               <button
                 onClick={handleSubmit}
                 disabled={!file || isLoading}
@@ -753,7 +810,14 @@ export default function App() {
             
             <div className="w-full lg:w-3/4 xl:w-2/3 flex flex-col gap-4 lg:gap-6">
               <div className={`min-h-[200px] rounded-lg p-4 lg:p-6 flex items-center justify-center border transition-colors ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-slate-100 border-slate-200'}`}>
-                {isLoading && <Loader message={statusMessages[status]} isDark={isDark} />}
+                {isLoading && (
+                  <Loader
+                    message={status === 'summarizing'
+                      ? `Analyzing and classifying with ${AI_PROVIDER_OPTIONS.find(option => option.value === aiProvider)?.label || 'AI'}...`
+                      : statusMessages[status]}
+                    isDark={isDark}
+                  />
+                )}
                 {!isLoading && status === 'error' && <ErrorMessage message={errorMessage} isDark={isDark} />}
                 {!isLoading && status === 'success' && <SummaryDisplay summary={summary} coverImageUrl={coverImageUrl} isDark={isDark} />}
                 {!isLoading && (status === 'idle' && !errorMessage) && (

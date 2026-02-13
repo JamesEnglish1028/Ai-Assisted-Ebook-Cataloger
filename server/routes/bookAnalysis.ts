@@ -1,6 +1,6 @@
 import express from 'express';
 import multer from 'multer';
-import { query, validationResult } from 'express-validator';
+import { body, query, validationResult } from 'express-validator';
 import { analyzeBook } from '../controllers/bookAnalysisController';
 
 const router = express.Router();
@@ -37,6 +37,15 @@ const validateAnalyzeBookQuery = [
     .optional()
     .isInt({ min: 1000, max: 500000 })
     .withMessage('maxTextLength must be between 1000 and 500000 characters'),
+  body('aiProvider')
+    .optional()
+    .isIn(['google', 'gemini', 'openai', 'anthropic', 'claude'])
+    .withMessage('aiProvider must be one of: google, openai, anthropic'),
+  body('aiModel')
+    .optional()
+    .isString()
+    .isLength({ min: 1, max: 100 })
+    .withMessage('aiModel must be a non-empty string up to 100 characters'),
 ];
 
 // Validation error handler
@@ -73,9 +82,9 @@ const handleValidationErrors = (req: express.Request, res: express.Response, nex
  * Response: JSON with analysis results
  */
 router.post('/analyze-book', 
+  upload.single('file'),
   validateAnalyzeBookQuery,
   handleValidationErrors,
-  upload.single('file'), 
   analyzeBook
 );
 

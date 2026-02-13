@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
 import { parsePdfFile, parseEpubFile } from '../services/fileParser';
-import { generateBookAnalysis } from '../services/geminiService';
+import { generateBookAnalysisWithProvider, resolveAISelection } from '../services/aiProviderService';
 import { calculateFleschKincaid, calculateGunningFog } from '../services/textAnalysis';
 
 // Simple in-memory cache (in production, use Redis or similar)
@@ -65,14 +65,19 @@ export async function analyzeBook(req: Request, res: Response, next: NextFunctio
       });
     }
 
-    // Generate cache key from file hash
+    const aiSelection = resolveAISelection(
+      typeof req.body?.aiProvider === 'string' ? req.body.aiProvider : undefined,
+      typeof req.body?.aiModel === 'string' ? req.body.aiModel : undefined
+    );
+
+    // Generate cache key from file hash and options
     const fileHash = crypto.createHash('md5').update(file.buffer).digest('hex');
     const extractCover = req.query.extractCover === 'true';
     const requestedMaxTextLength = typeof req.query.maxTextLength === 'string'
       ? parseInt(req.query.maxTextLength, 10)
       : NaN;
     const maxTextLength = Number.isFinite(requestedMaxTextLength) ? requestedMaxTextLength : 200000;
-    const cacheKey = `${fileHash}_${extractCover}_${maxTextLength}`;
+    const cacheKey = `${fileHash}_${extractCover}_${maxTextLength}_${aiSelection.provider}_${aiSelection.model}`;
     
     // Check cache first
     const cached = analysisCache.get(cacheKey);
@@ -120,12 +125,12 @@ export async function analyzeBook(req: Request, res: Response, next: NextFunctio
     const fleschKincaid = calculateFleschKincaid(parseResult.text);
     const gunningFog = calculateGunningFog(parseResult.text);
 
-    console.log('🤖 Analyzing with Gemini AI...');
+    console.log(`🤖 Analyzing with ${aiSelection.provider} (${aiSelection.model})...`);
 
     // Generate AI analysis with error handling
     let analysis;
     try {
-      analysis = await generateBookAnalysis(parseResult.text);
+      analysis = await generateBookAnalysisWithProvider(parseResult.text, aiSelection);
     } catch (aiError: any) {
       console.error('❌ AI analysis failed:', aiError.message);
       return res.status(503).json({
@@ -155,6 +160,8 @@ export async function analyzeBook(req: Request, res: Response, next: NextFunctio
       coverImage: parseResult.coverImageUrl ?? null,
       fileName: file.originalname,
       fileType: isPdf ? 'pdf' : 'epub',
+      aiProvider: aiSelection.provider,
+      aiModel: aiSelection.model,
       processedAt: new Date().toISOString(),
       processingTime: `${((Date.now() - startTime) / 1000).toFixed(2)}s`,
     };

@@ -32,11 +32,14 @@ export interface BookAnalysis {
   discipline: string;
 }
 
-export async function generateBookAnalysis(bookText: string): Promise<BookAnalysis> {
+export async function generateBookAnalysis(
+  bookText: string,
+  options?: { model?: string }
+): Promise<BookAnalysis> {
   const prompt = `
-    You are an expert cataloging librarian with deep knowledge of LCC, LCSH, and BISAC classification systems.
+    You are an expert librarian with deep knowledge of MARC records cataloging and book classifications using LCC, LCSH, and BISAC classification systems.
     Analyze the following text from an ebook and perform the following tasks:
-    1.  Generate a compelling summary of 1-2 paragraphs for an online library catalog. The summary should capture the essence of the plot, key themes, and the overall tone of the book, enticing potential readers without revealing major spoilers.
+    1.  Generate a compelling 1 paragraphs book summary for an online library catalog. The summary should capture the essence of the plot, key themes, and the overall tone of the book, enticing potential readers without revealing major spoilers.
     2.  Determine a list of the most relevant Library of Congress Classification (LCC) Subject Headings. For each heading, provide its letter designator, the main class name, and the specific sub-class name. You MUST NOT provide LCC call numbers like "PS3552.L84".
     3.  Determine a list of the most relevant Library of Congress Subject Headings (LCSH). Each heading should be a single string with the main heading and any subdivisions separated by a double hyphen (e.g., "Fantasy fiction -- History and criticism").
     4.  Determine a list of the most relevant Book Industry Standards and Communications (BISAC) classification headings. For each heading, you MUST provide both the code and its full descriptive name. For example, "FIC009000 - FICTION / Fantasy / General".
@@ -71,7 +74,7 @@ export async function generateBookAnalysis(bookText: string): Promise<BookAnalys
   try {
     const ai = getAI();
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: options?.model || 'gemini-2.5-flash',
         contents: prompt,
         config: {
           temperature: 0.5,
