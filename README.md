@@ -180,8 +180,12 @@ Ai-Assisted-Ebook-Cataloger/
 
 | Variable | Description | Required |
 |----------|-------------|----------|
-| `GEMINI_API_KEY` | Your Google Gemini API key | Yes |
+| `GEMINI_API_KEY` | Google Gemini API key (required when using Google provider) | Conditionally |
+| `OPENAI_API_KEY` | OpenAI API key (required when using OpenAI provider) | Conditionally |
+| `ANTHROPIC_API_KEY` | Anthropic API key (required when using Anthropic provider) | Conditionally |
 | `PORT` | API server port (default: 3001) | No |
+| `ALLOWED_ORIGINS` | Comma-separated list of allowed browser origins for API CORS | No |
+| `SERVE_STATIC` | Set `false` when deploying API + frontend as separate Render services | No |
 
 ## Development & Testing
 
@@ -231,12 +235,53 @@ npm run server:prod
 
 This application is ready for deployment on **Render** (recommended) or similar platforms.
 
-**Quick Deploy to Render:**
-1. Fork/clone this repository
-2. Connect the repo to Render for both a Web Service (API) and a Static Site (frontend)
-3. Set `GEMINI_API_KEY` on the API service
-4. Set `VITE_API_BASE_URL` on the static site (pointing to the API URL)
-5. Deploy automatically with included `render.yaml`
+### Render.com Configuration (Exact Values)
+
+This repo is configured for **two Render services** from one repository:
+1. `ai-ebook-cataloger-api` (Web Service, Node API)
+2. `ai-ebook-cataloger-web` (Static Site, React frontend)
+
+Use **Blueprint Deploy** with the included `render.yaml`:
+1. In Render, go to `New` -> `Blueprint`.
+2. Select this GitHub repo.
+3. Render will detect and create both services from `render.yaml`.
+
+#### API service (`ai-ebook-cataloger-api`)
+
+Set/verify these values in Render:
+1. `Type`: `Web Service`
+2. `Environment`: `Node`
+3. `Plan`: `starter`
+4. `Region`: `oregon`
+5. `Build Command`: `npm ci`
+6. `Start Command`: `npm run start`
+7. `Health Check Path`: `/health`
+8. `Environment Variables`:
+   - `NODE_ENV=production`
+   - `SERVE_STATIC=false`
+   - `GEMINI_API_KEY` (set if using Google provider)
+   - `OPENAI_API_KEY` (set if using OpenAI provider)
+   - `ANTHROPIC_API_KEY` (set if using Anthropic provider)
+   - `ALLOWED_ORIGINS` (recommended: set to your static-site URL, e.g. `https://ai-ebook-cataloger-web.onrender.com`)
+
+#### Frontend static site (`ai-ebook-cataloger-web`)
+
+Set/verify these values in Render:
+1. `Type`: `Static Site`
+2. `Build Command`: `npm ci && npm run build`
+3. `Publish Directory`: `dist`
+4. `Environment Variables`:
+   - `VITE_API_BASE_URL=https://ai-ebook-cataloger-api.onrender.com` (use your actual API URL)
+5. `Routes` rewrite:
+   - Source: `/*`
+   - Destination: `/index.html`
+
+#### Post-deploy checks
+
+1. Open API health endpoint: `https://<your-api>.onrender.com/health`
+2. Open frontend URL and upload a test PDF/EPUB.
+3. In the UI, select provider/model and confirm analysis succeeds.
+4. If browser calls fail, verify `ALLOWED_ORIGINS` on API includes your static site URL.
 
 **For detailed deployment instructions, see:** [RENDER_DEPLOYMENT.md](./RENDER_DEPLOYMENT.md)
 
