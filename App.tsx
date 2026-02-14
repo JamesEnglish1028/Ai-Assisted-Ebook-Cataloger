@@ -17,7 +17,6 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs
 
 type Status = 'idle' | 'parsing' | 'summarizing' | 'success' | 'error';
 type FileType = 'pdf' | 'epub';
-type Theme = 'light' | 'dark';
 type AIProvider = 'google' | 'openai' | 'anthropic';
 
 type OmittedMetadata = 'lcc' | 'bisac' | 'lcsh' | 'fieldOfStudy' | 'discipline' | 'readingLevel' | 'gunningFog';
@@ -71,14 +70,6 @@ const findIsbnInString = (text: string | null | undefined): string | undefined =
 
 
 export default function App() {
-  const [theme, setTheme] = useState<Theme>(() => {
-    if (typeof window === 'undefined') return 'light';
-    const savedTheme = window.localStorage.getItem('theme');
-    if (savedTheme === 'light' || savedTheme === 'dark') {
-      return savedTheme;
-    }
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-  });
   const [file, setFile] = useState<File | null>(null);
   const [fileType, setFileType] = useState<FileType>('pdf');
   const [aiProvider, setAiProvider] = useState<AIProvider>('google');
@@ -91,14 +82,7 @@ export default function App() {
   const [tableOfContents, setTableOfContents] = useState<TocItem[] | null>(null);
   const [pageList, setPageList] = useState<PageListItem[] | null>(null);
   const [isGuideOpen, setIsGuideOpen] = useState<boolean>(false);
-  const isDark = theme === 'dark';
-
-
-
-  // Persist theme preference
-  useEffect(() => {
-    window.localStorage.setItem('theme', theme);
-  }, [theme]);
+  const isDark = false;
 
   useEffect(() => {
     return () => {
@@ -725,37 +709,33 @@ export default function App() {
   const isLoading = status === 'parsing' || status === 'summarizing';
 
   return (
-    <div className={`min-h-screen flex flex-col items-center p-2 sm:p-4 lg:p-6 transition-colors ${isDark ? 'bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
-      <div className="w-full max-w-7xl mx-auto">
-        <header className="text-center mb-8">
-          <div className="flex justify-end mb-4">
-            <button
-              type="button"
-              onClick={() => setTheme(prev => (prev === 'dark' ? 'light' : 'dark'))}
-              className={`inline-flex items-center gap-2 border rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${isDark ? 'bg-slate-800 text-slate-100 border-slate-700 hover:bg-slate-700' : 'bg-slate-200 text-slate-900 border-slate-300 hover:bg-slate-300'}`}
-              aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
-            >
-              {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
-            </button>
+    <div className={`max-w-6xl mx-auto p-4 md:p-8 space-y-8 pb-20 text-slate-900`}>
+      <div className="w-full">
+        <header className="space-y-3 mb-8">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center text-white shadow-lg shadow-blue-200">
+              <i className="fa-solid fa-book-open text-xl"></i>
+            </div>
+            <h1 className={`text-3xl font-extrabold tracking-tight`}>
+              AI Assisted Ebook Cataloger
+            </h1>
           </div>
-          <h1 className={`text-4xl sm:text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r ${isDark ? 'from-blue-400 to-cyan-400' : 'from-blue-600 to-cyan-600'}`}>
-            AI Assisted Ebook Cataloger
-          </h1>
-          <p className={`mt-4 text-lg ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+          <p className="text-slate-500 font-medium">
             Upload your ebook to automatically extract metadata, generate summaries, and determine classifications.
           </p>
           <button
             type="button"
             onClick={() => setIsGuideOpen(true)}
-            className={`mt-3 inline-flex items-center text-sm underline underline-offset-4 transition-colors ${isDark ? 'text-cyan-300 hover:text-cyan-200' : 'text-cyan-700 hover:text-cyan-600'}`}
+            className="inline-flex items-center gap-2 text-sm font-semibold text-blue-600 hover:text-blue-700 transition-colors"
           >
+            <i className="fa-solid fa-book"></i>
             Open One-Page How-To Guide
           </button>
         </header>
 
-        <main className={`rounded-2xl shadow-2xl shadow-blue-500/10 p-4 md:p-6 xl:p-8 border transition-colors ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white/80 border-slate-200'}`}>
-          <div className="flex flex-col lg:flex-row items-start gap-4 lg:gap-6">
-            <div className="w-full lg:w-1/4 xl:w-1/3 flex-shrink-0">
+        <main className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+          <div className="flex flex-col lg:flex-row items-start gap-6">
+            <div className="w-full lg:w-1/3 flex-shrink-0">
               <FileUpload 
                 file={file}
                 fileType={fileType}
@@ -764,7 +744,7 @@ export default function App() {
                 disabled={isLoading}
                 isDark={isDark}
               />
-              <div className={`mt-4 space-y-3 rounded-lg border p-3 ${isDark ? 'border-slate-700 bg-slate-900/60' : 'border-slate-200 bg-slate-50'}`}>
+              <div className="mt-4 space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <div>
                   <label htmlFor="ai-provider" className={`block text-xs font-semibold mb-1 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
                     AI Provider
@@ -801,15 +781,15 @@ export default function App() {
               <button
                 onClick={handleSubmit}
                 disabled={!file || isLoading}
-                className={`w-full mt-4 bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-500 disabled:cursor-not-allowed transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-lg ${isDark ? 'disabled:bg-slate-600 focus:ring-offset-2 focus:ring-offset-slate-800' : 'disabled:bg-slate-400 focus:ring-offset-2 focus:ring-offset-slate-50'}`}
+                className="w-full mt-4 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-bold py-3 px-4 rounded-xl transition-all shadow-md shadow-blue-100"
               >
                 {isLoading ? 'Processing...' : 'Generate Analysis'}
               </button>
               <MetadataDisplay metadata={metadata} isDark={isDark} />
             </div>
             
-            <div className="w-full lg:w-3/4 xl:w-2/3 flex flex-col gap-4 lg:gap-6">
-              <div className={`min-h-[200px] rounded-lg p-4 lg:p-6 flex items-center justify-center border transition-colors ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-slate-100 border-slate-200'}`}>
+            <div className="w-full lg:w-2/3 flex flex-col gap-6">
+              <div className="min-h-[220px] bg-slate-50 border border-slate-200 rounded-xl p-6 flex items-center justify-center">
                 {isLoading && (
                   <Loader
                     message={status === 'summarizing'
@@ -822,7 +802,7 @@ export default function App() {
                 {!isLoading && status === 'success' && <SummaryDisplay summary={summary} coverImageUrl={coverImageUrl} isDark={isDark} />}
                 {!isLoading && (status === 'idle' && !errorMessage) && (
                   <div className="text-center text-slate-500">
-                    <p className="text-lg">Your generated analysis will appear here.</p>
+                    <p className="text-base font-medium">Your generated analysis will appear here.</p>
                   </div>
                 )}
               </div>

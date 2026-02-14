@@ -170,8 +170,8 @@ export const MetadataDisplay: React.FC<MetadataDisplayProps> = ({ metadata, isDa
   const hasAccessibilityInfo = !!(metadata.certification || (metadata.accessibilityFeatures && metadata.accessibilityFeatures.length > 0) || (metadata.accessModes && metadata.accessModes.length > 0) || (metadata.accessModesSufficient && metadata.accessModesSufficient.length > 0) || (metadata.hazards && metadata.hazards.length > 0));
 
   return (
-    <div className={`w-full mt-6 p-4 rounded-lg border animate-fade-in transition-colors ${isDark ? 'bg-slate-900/50 border-slate-700' : 'bg-white border-slate-200'}`}>
-      <h3 className={`text-lg font-semibold mb-3 ${isDark ? 'text-cyan-400' : 'text-cyan-600'}`}>Book Details</h3>
+    <div className="w-full mt-6 p-4 rounded-xl border border-slate-200 bg-white animate-fade-in">
+      <h3 className="text-sm font-bold text-slate-700 uppercase tracking-widest mb-3">Book Details</h3>
       
       {hasCoreInfo && (
         <dl className="space-y-4">

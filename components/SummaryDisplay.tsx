@@ -22,7 +22,7 @@ export const SummaryDisplay: React.FC<SummaryDisplayProps> = ({ summary, coverIm
 
   return (
     <div className="w-full animate-fade-in">
-      <h2 className={`text-2xl font-bold mb-6 text-center text-transparent bg-clip-text bg-gradient-to-r ${isDark ? 'from-blue-400 to-cyan-400' : 'from-blue-600 to-cyan-600'}`}>Generated Analysis</h2>
+      <h2 className="text-xl font-bold text-slate-800 mb-4">Generated Analysis</h2>
       
       <div className="flex flex-col items-center gap-8">
         {coverImageUrl && (
@@ -36,7 +36,7 @@ export const SummaryDisplay: React.FC<SummaryDisplayProps> = ({ summary, coverIm
         )}
 
         <div className="w-full text-left">
-          <h3 className={`text-xl font-bold mb-3 ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>Summary</h3>
+          <h3 className="text-sm font-bold text-slate-700 uppercase tracking-widest mb-2">Summary</h3>
           <div className={`prose max-w-none space-y-4 ${isDark ? 'text-slate-300 prose-invert' : 'text-slate-700'}`}>
             {summary.split('\n').map((paragraph, index) => (
               paragraph.trim() && <p key={index}>{paragraph}</p>
@@ -47,7 +47,7 @@ export const SummaryDisplay: React.FC<SummaryDisplayProps> = ({ summary, coverIm
             <button
               onClick={handleCopy}
               disabled={!summary || isCopied}
-              className={`inline-flex items-center gap-2 bg-cyan-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-cyan-500 disabled:cursor-not-allowed transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500 shadow-md ${isDark ? 'disabled:bg-slate-600 focus:ring-offset-slate-900' : 'disabled:bg-slate-400 focus:ring-offset-slate-50'}`}
+              className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-bold py-2 px-4 rounded-xl transition-all shadow-md shadow-blue-100 disabled:cursor-not-allowed"
               aria-live="polite"
             >
               {isCopied ? (

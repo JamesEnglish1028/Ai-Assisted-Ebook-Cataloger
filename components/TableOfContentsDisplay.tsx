@@ -44,20 +44,20 @@ export const TableOfContentsDisplay: React.FC<TableOfContentsDisplayProps> = ({ 
 
   return (
     <div className="w-full animate-fade-in">
-      <div className={`rounded-2xl shadow-2xl shadow-blue-500/10 p-6 md:p-8 border transition-colors ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white/80 border-slate-200'}`}>
-        <h2 className={`text-2xl font-bold mb-6 text-center text-transparent bg-clip-text bg-gradient-to-r ${isDark ? 'from-blue-400 to-cyan-400' : 'from-blue-600 to-cyan-600'}`}>
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+        <h2 className="text-xl font-bold text-slate-800 mb-4">
           Contents &amp; Navigation
         </h2>
         <div className="max-h-96 overflow-y-auto pr-2 text-sm">
           {hasToc && (
             <>
-              <h3 className={`text-lg font-semibold mb-2 mt-4 first:mt-0 ${isDark ? 'text-cyan-400' : 'text-cyan-600'}`}>Table of Contents</h3>
+              <h3 className="text-sm font-bold text-slate-700 uppercase tracking-widest mb-2 mt-4 first:mt-0">Table of Contents</h3>
               <TocList items={toc} isDark={isDark} />
             </>
           )}
           {hasPageList && (
             <>
-              <h3 className={`text-lg font-semibold mb-2 mt-4 first:mt-0 ${isDark ? 'text-cyan-400' : 'text-cyan-600'}`}>Page List</h3>
+              <h3 className="text-sm font-bold text-slate-700 uppercase tracking-widest mb-2 mt-4 first:mt-0">Page List</h3>
               <ul className="space-y-1.5">
                 {pageList.map((item, index) => (
                   <li key={index} className={`flex justify-between border-b py-1 ${isDark ? 'text-slate-300 border-slate-700/50' : 'text-slate-700 border-slate-200'}`}>

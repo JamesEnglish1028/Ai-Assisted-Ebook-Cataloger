@@ -123,11 +123,11 @@ export const FileUpload: React.FC<FileUploadProps> = ({ file, fileType, onFileCh
   return (
     <div className="w-full">
       <div className="flex justify-center mb-4">
-        <div className={`p-1 rounded-lg flex gap-1 border transition-colors ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-slate-100 border-slate-300'}`}>
+        <div className="p-1 rounded-xl flex gap-1 border border-slate-200 bg-slate-50">
           <button 
             onClick={() => onFileTypeChange('pdf')} 
             disabled={disabled}
-            className={`px-4 py-1 rounded-md text-sm font-semibold transition-colors duration-200 ${fileType === 'pdf' ? 'bg-blue-600 text-white' : (isDark ? 'text-slate-400 hover:bg-slate-700/50' : 'text-slate-700 hover:bg-slate-200')}`}
+            className={`px-4 py-1 rounded-lg text-sm font-semibold transition-colors duration-200 ${fileType === 'pdf' ? 'bg-blue-600 text-white' : 'text-slate-700 hover:bg-slate-200'}` }
             aria-pressed={fileType === 'pdf' ? 'true' : 'false'}
           >
             PDF
@@ -135,7 +135,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ file, fileType, onFileCh
           <button 
             onClick={() => onFileTypeChange('epub')} 
             disabled={disabled}
-            className={`px-4 py-1 rounded-md text-sm font-semibold transition-colors duration-200 ${fileType === 'epub' ? 'bg-blue-600 text-white' : (isDark ? 'text-slate-400 hover:bg-slate-700/50' : 'text-slate-700 hover:bg-slate-200')}`}
+            className={`px-4 py-1 rounded-lg text-sm font-semibold transition-colors duration-200 ${fileType === 'epub' ? 'bg-blue-600 text-white' : 'text-slate-700 hover:bg-slate-200'}` }
             aria-pressed={fileType === 'epub' ? 'true' : 'false'}
           >
             EPUB
@@ -148,7 +148,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ file, fileType, onFileCh
         onDragLeave={(e) => handleDragEvents(e, false)}
         onDragOver={(e) => handleDragEvents(e, true)}
         onDrop={handleDrop}
-        className={`flex flex-col items-center justify-center w-full h-48 border-2 border-dashed rounded-lg cursor-pointer transition-all duration-300 ${
+        className={`flex flex-col items-center justify-center w-full h-48 border-2 border-dashed rounded-xl cursor-pointer transition-all duration-300 ${
           disabled ? (isDark ? 'bg-slate-700/50 border-slate-600 cursor-not-allowed' : 'bg-slate-200 border-slate-300 cursor-not-allowed') :
           isDragging ? (isDark ? 'bg-blue-900/50 border-blue-400 scale-105' : 'bg-blue-100 border-blue-500 scale-105') : (isDark ? 'bg-slate-800 border-slate-600 hover:bg-slate-700/50 hover:border-slate-500' : 'bg-white border-slate-300 hover:bg-slate-100 hover:border-slate-400')
         }`}

@@ -6,7 +6,17 @@ interface HowToGuideModalProps {
   isDark: boolean;
 }
 
-export const HowToGuideModal: React.FC<HowToGuideModalProps> = ({ isOpen, onClose, isDark }) => {
+const GuideSection: React.FC<{ icon: string; title: string; children: React.ReactNode }> = ({ icon, title, children }) => (
+  <section className="space-y-2">
+    <h3 className="text-base font-semibold text-blue-700 flex items-center gap-2">
+      <i className={`fa-solid ${icon} text-blue-500`}></i>
+      {title}
+    </h3>
+    <div className="space-y-1 text-slate-700">{children}</div>
+  </section>
+);
+
+export const HowToGuideModal: React.FC<HowToGuideModalProps> = ({ isOpen, onClose }) => {
   useEffect(() => {
     if (!isOpen) return;
 
@@ -36,67 +46,62 @@ export const HowToGuideModal: React.FC<HowToGuideModalProps> = ({ isOpen, onClos
         className="absolute inset-0 bg-black/50"
       />
 
-      <div className={`relative w-full max-w-4xl max-h-[90vh] overflow-auto rounded-xl border shadow-2xl p-6 md:p-8 ${isDark ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-white border-slate-200 text-slate-900'}`}>
+      <div className="relative w-full max-w-4xl max-h-[90vh] overflow-auto rounded-xl border border-slate-200 shadow-2xl p-6 md:p-8 bg-white text-slate-900">
         <div className="flex items-start justify-between gap-4">
-          <h2 id="how-to-guide-title" className={`text-2xl font-bold ${isDark ? 'text-cyan-300' : 'text-cyan-700'}`}>
+          <h2 id="how-to-guide-title" className="text-2xl font-bold text-blue-700 flex items-center gap-2">
+            <i className="fa-solid fa-book text-blue-500"></i>
             AI Assisted Ebook Cataloger: One-Page How-To Guide
           </h2>
           <button
             type="button"
             onClick={onClose}
-            className={`rounded-md px-3 py-1.5 text-sm font-semibold border transition-colors ${isDark ? 'bg-slate-800 border-slate-600 hover:bg-slate-700' : 'bg-slate-100 border-slate-300 hover:bg-slate-200'}`}
+            className="rounded-md px-3 py-1.5 text-sm font-semibold border border-slate-300 bg-slate-100 hover:bg-slate-200"
           >
             Close
           </button>
         </div>
 
         <div className="mt-6 space-y-5 text-sm leading-6">
-          <section>
-            <h3 className={`text-base font-semibold ${isDark ? 'text-blue-300' : 'text-blue-700'}`}>1. What This App Does</h3>
-            <p className={isDark ? 'text-slate-300' : 'text-slate-700'}>
+          <GuideSection icon="fa-wand-magic-sparkles" title="What This App Does">
+            <p>
               This app analyzes PDF or EPUB books and generates catalog-ready metadata, AI summary text, library classifications
               (LCC, LCSH, BISAC), readability metrics, and optional navigation details like table of contents and page lists.
             </p>
-          </section>
+          </GuideSection>
 
-          <section>
-            <h3 className={`text-base font-semibold ${isDark ? 'text-blue-300' : 'text-blue-700'}`}>2. Quick Start</h3>
-            <p className={isDark ? 'text-slate-300' : 'text-slate-700'}>1. Select `PDF` or `EPUB` in the upload panel.</p>
-            <p className={isDark ? 'text-slate-300' : 'text-slate-700'}>2. Upload a valid ebook file (drag/drop or click).</p>
-            <p className={isDark ? 'text-slate-300' : 'text-slate-700'}>3. Click `Generate Analysis`.</p>
-            <p className={isDark ? 'text-slate-300' : 'text-slate-700'}>4. Review results in the summary and metadata sections.</p>
-          </section>
+          <GuideSection icon="fa-play" title="Quick Start">
+            <p>1. Select `PDF` or `EPUB` in the upload panel.</p>
+            <p>2. Upload a valid ebook file (drag/drop or click).</p>
+            <p>3. Click `Generate Analysis`.</p>
+            <p>4. Review results in the summary and metadata sections.</p>
+          </GuideSection>
 
-          <section>
-            <h3 className={`text-base font-semibold ${isDark ? 'text-blue-300' : 'text-blue-700'}`}>3. Understanding Results</h3>
-            <p className={isDark ? 'text-slate-300' : 'text-slate-700'}>
+          <GuideSection icon="fa-chart-simple" title="Understanding Results">
+            <p>
               `Summary`: reader-facing description of the book. `Book Details`: extracted and inferred fields like title, author,
               ISBN, page count, classifications, discipline, and accessibility data. `Contents & Navigation`: TOC/page references when available.
             </p>
-          </section>
+          </GuideSection>
 
-          <section>
-            <h3 className={`text-base font-semibold ${isDark ? 'text-blue-300' : 'text-blue-700'}`}>4. Export Options</h3>
-            <p className={isDark ? 'text-slate-300' : 'text-slate-700'}>
+          <GuideSection icon="fa-file-export" title="Export Options">
+            <p>
               Use `Export JSON` for integration workflows. Use `Download MARC 21` for catalog records in `.mrk` format.
               The MARC export prompts for local control number, organization code, and online URL before generating output.
             </p>
-          </section>
+          </GuideSection>
 
-          <section>
-            <h3 className={`text-base font-semibold ${isDark ? 'text-blue-300' : 'text-blue-700'}`}>5. Theme and Accessibility</h3>
-            <p className={isDark ? 'text-slate-300' : 'text-slate-700'}>
-              Use the header toggle to switch between Light and Dark modes at any time. Your selection is saved for future sessions.
+          <GuideSection icon="fa-universal-access" title="Accessibility Notes">
+            <p>
+              Accessibility metadata is extracted when present and mapped into catalog-friendly fields to support discovery and patron access.
             </p>
-          </section>
+          </GuideSection>
 
-          <section>
-            <h3 className={`text-base font-semibold ${isDark ? 'text-blue-300' : 'text-blue-700'}`}>6. Common Troubleshooting</h3>
-            <p className={isDark ? 'text-slate-300' : 'text-slate-700'}>
+          <GuideSection icon="fa-screwdriver-wrench" title="Common Troubleshooting">
+            <p>
               `Failed to parse file`: verify file is valid and not password-protected/corrupted. `No text content found`: file may be image-only.
               `AI analysis failed`: check server API key and retry. `Too many requests`: wait for the rate-limit window to reset.
             </p>
-          </section>
+          </GuideSection>
         </div>
       </div>
     </div>
