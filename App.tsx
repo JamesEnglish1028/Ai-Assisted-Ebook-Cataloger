@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { FileUpload } from './components/FileUpload';
 import { Loader } from './components/Loader';
 import { SummaryDisplay } from './components/SummaryDisplay';
@@ -8,16 +8,21 @@ import { TableOfContentsDisplay, TocItem, PageListItem } from './components/Tabl
 import { ExportButton } from './components/ExportButton';
 import { HowToGuideModal } from './components/HowToGuideModal';
 import { calculateFleschKincaid, calculateGunningFog } from './utils/textAnalysis';
+import { convertPdfToMarkdown, PdfConversionCancelledError, PdfMdProgress } from './services/extract2mdService';
 import * as pdfjsLib from 'pdfjs-dist';
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import JSZip from 'jszip';
 
 // Configure PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.3.136/pdf.worker.min.mjs`;
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 
 type Status = 'idle' | 'parsing' | 'summarizing' | 'success' | 'error';
 type FileType = 'pdf' | 'epub';
 type AIProvider = 'google' | 'openai' | 'anthropic';
+type PdfWorkflow = 'server-parser' | 'browser-text';
+type PdfMdMode = 'quick' | 'ocr';
+type ToastLevel = 'info' | 'success' | 'error';
 
 type OmittedMetadata = 'lcc' | 'bisac' | 'lcsh' | 'fieldOfStudy' | 'discipline' | 'readingLevel' | 'gunningFog';
 
@@ -27,6 +32,12 @@ type ParseResult = {
     metadata: Omit<FileMetadata, OmittedMetadata>;
     toc?: TocItem[] | null;
     pageList?: PageListItem[] | null;
+};
+
+type ToastMessage = {
+  id: number;
+  message: string;
+  level: ToastLevel;
 };
 
 const statusMessages: Record<Status, string> = {
@@ -48,6 +59,16 @@ const AI_MODEL_OPTIONS: Record<AIProvider, string[]> = {
   openai: ['gpt-4.1-mini', 'gpt-4.1', 'gpt-4o-mini'],
   anthropic: ['claude-3-5-haiku-latest', 'claude-3-7-sonnet-latest'],
 };
+
+const PDF_WORKFLOW_OPTIONS: Array<{ value: PdfWorkflow; label: string }> = [
+  { value: 'server-parser', label: 'Server Parser (Current)' },
+  { value: 'browser-text', label: 'Browser Text -> AI (Incremental)' },
+];
+
+const PDF_MD_MODE_OPTIONS: Array<{ value: PdfMdMode; label: string }> = [
+  { value: 'quick', label: 'Fast (PDF text layer)' },
+  { value: 'ocr', label: 'High Accuracy OCR (slower)' },
+];
 
 
 // Helper function to find a valid ISBN-10 or ISBN-13 from a string.
@@ -72,6 +93,11 @@ const findIsbnInString = (text: string | null | undefined): string | undefined =
 export default function App() {
   const [file, setFile] = useState<File | null>(null);
   const [fileType, setFileType] = useState<FileType>('pdf');
+  const [pdfWorkflow, setPdfWorkflow] = useState<PdfWorkflow>('server-parser');
+  const [pdfMdMode, setPdfMdMode] = useState<PdfMdMode>('quick');
+  const [enableOcrFallback, setEnableOcrFallback] = useState<boolean>(true);
+  const [pdfConversionProgress, setPdfConversionProgress] = useState<number>(0);
+  const [pdfConversionMessage, setPdfConversionMessage] = useState<string>('');
   const [aiProvider, setAiProvider] = useState<AIProvider>('google');
   const [aiModel, setAiModel] = useState<string>(AI_MODEL_OPTIONS.google[0]);
   const [status, setStatus] = useState<Status>('idle');
@@ -82,6 +108,12 @@ export default function App() {
   const [tableOfContents, setTableOfContents] = useState<TocItem[] | null>(null);
   const [pageList, setPageList] = useState<PageListItem[] | null>(null);
   const [isGuideOpen, setIsGuideOpen] = useState<boolean>(false);
+  const [isPdfWorkflowInfoOpen, setIsPdfWorkflowInfoOpen] = useState<boolean>(false);
+  const [isAiProviderInfoOpen, setIsAiProviderInfoOpen] = useState<boolean>(false);
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const activeConversionAbortRef = useRef<AbortController | null>(null);
+  const toastIdRef = useRef(0);
+  const toastTimeoutsRef = useRef<number[]>([]);
   const isDark = false;
 
   useEffect(() => {
@@ -91,6 +123,23 @@ export default function App() {
       }
     };
   }, [coverImageUrl]);
+
+  useEffect(() => {
+    return () => {
+      activeConversionAbortRef.current?.abort();
+      toastTimeoutsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId));
+      toastTimeoutsRef.current = [];
+    };
+  }, []);
+
+  const pushToast = useCallback((message: string, level: ToastLevel = 'info') => {
+    const id = ++toastIdRef.current;
+    setToasts((prev) => [...prev, { id, message, level }]);
+    const timeoutId = window.setTimeout(() => {
+      setToasts((prev) => prev.filter((toast) => toast.id !== id));
+    }, 4200);
+    toastTimeoutsRef.current.push(timeoutId);
+  }, []);
 
   useEffect(() => {
     const models = AI_MODEL_OPTIONS[aiProvider];
@@ -111,6 +160,8 @@ export default function App() {
       setTableOfContents(null);
       setPageList(null);
       setStatus('idle');
+      setPdfConversionProgress(0);
+      setPdfConversionMessage('');
     }
   };
 
@@ -129,6 +180,8 @@ export default function App() {
             setTableOfContents(null);
             setPageList(null);
             setErrorMessage('');
+            setPdfConversionProgress(0);
+            setPdfConversionMessage('');
         } else {
             setErrorMessage(`Invalid file type. Expected a ${fileType.toUpperCase()} file.`);
             setStatus('error');
@@ -315,6 +368,32 @@ export default function App() {
     })();
     
     return Promise.race([parsingPromise, timeoutPromise]);
+  };
+
+  const extractPdfCoverImage = async (fileToParse: File): Promise<string | null> => {
+    try {
+      const arrayBuffer = await fileToParse.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+      if (pdf.numPages < 1) {
+        return null;
+      }
+
+      const coverPage = await pdf.getPage(1);
+      const viewport = coverPage.getViewport({ scale: 1.3 });
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+      if (!context) {
+        return null;
+      }
+
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      await coverPage.render({ canvasContext: context, viewport, canvas } as any).promise;
+      return canvas.toDataURL('image/jpeg', 0.82);
+    } catch (error) {
+      console.warn('Could not extract PDF cover image in browser workflow:', error);
+      return null;
+    }
   };
 
   const parseEpub = (fileToParse: File): Promise<ParseResult> => {
@@ -650,9 +729,19 @@ export default function App() {
     setMetadata(null);
     setTableOfContents(null);
     setPageList(null);
+    setPdfConversionProgress(0);
+    setPdfConversionMessage('');
     
     try {
+      const abortController = new AbortController();
+      activeConversionAbortRef.current = abortController;
       setStatus('parsing');
+      pushToast(
+        fileType === 'pdf' && pdfWorkflow === 'browser-text'
+          ? 'Starting browser PDF conversion...'
+          : 'Uploading file to API parser...',
+        'info',
+      );
       
       // Debug: Log file details
       console.log('📁 File to upload:', {
@@ -662,27 +751,167 @@ export default function App() {
         lastModified: file.lastModified
       });
       
-      // Use the API instead of local parsing
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('aiProvider', aiProvider);
-      formData.append('aiModel', aiModel);
-      
-      // Debug: Log FormData contents
-      console.log('📦 FormData created, ready to send');
-      
-      setStatus('summarizing');
-      
-      // Request with extractCover=true for UI
-      // Use env override in production, fall back to Vite proxy in dev
+      let response: Response;
       const apiBase = import.meta.env.VITE_API_BASE_URL || '';
-      const response = await fetch(`${apiBase}/api/analyze-book?extractCover=true`, {
-        method: 'POST',
-        body: formData
-      }).catch((error) => {
-        console.error('❌ Fetch error:', error);
-        throw new Error(`Network error: ${error.message}. This might be due to a corrupted or incompatible file format.`);
-      });
+
+      if (fileType === 'pdf' && pdfWorkflow === 'browser-text') {
+        console.log('📄 Using browser markdown extraction workflow for PDF (extract2md)');
+        const conversionStartedAt = Date.now();
+        let usedOcrFallback = false;
+        let coverImageDataUrl: string | null = null;
+        pushToast('PDF conversion started (extract2md).', 'info');
+
+        const handlePdfProgress = (progress: PdfMdProgress) => {
+          setPdfConversionProgress(Math.round(progress.percent));
+          setPdfConversionMessage(progress.message);
+        };
+
+        const runConversion = async (mode: PdfMdMode) => {
+          try {
+            return await convertPdfToMarkdown(file, mode, handlePdfProgress, abortController.signal);
+          } catch (error: any) {
+            if (mode === 'quick' && enableOcrFallback) {
+              console.warn('Fast conversion failed, retrying with OCR fallback:', error?.message || error);
+              usedOcrFallback = true;
+              pushToast('Fast mode failed. Retrying with OCR fallback.', 'info');
+              return await convertPdfToMarkdown(file, 'ocr', handlePdfProgress, abortController.signal);
+            }
+            throw error;
+          }
+        };
+
+        let markdownText = '';
+        let sourceType = 'pdf-extract2md';
+        let derivedMetadata: any = {
+          title: file.name.replace(/\.pdf$/i, ''),
+          pageCount: {
+            value: 0,
+            type: 'actual',
+          },
+        };
+        let telemetryExtra: Record<string, unknown> = {};
+
+        let shouldFallbackToServerParser = false;
+
+        try {
+          const conversionResult = await runConversion(pdfMdMode);
+          markdownText = conversionResult.markdown;
+          derivedMetadata = {
+            title: file.name.replace(/\.pdf$/i, ''),
+            pageCount: {
+              value: conversionResult.totalPages || conversionResult.pagesProcessed || 0,
+              type: 'actual',
+            },
+          };
+        } catch (error: any) {
+          const errorMessage = String(error?.message || error);
+          const loadFailure = /dynamically imported module|extract2md library is unavailable/i.test(errorMessage);
+          if (!loadFailure) {
+            throw error;
+          }
+
+          pushToast('extract2md failed to load. Falling back to built-in browser extraction.', 'info');
+          try {
+            const parsedPdfFallback = await parsePdf(file);
+            markdownText = parsedPdfFallback.text;
+            sourceType = 'pdf-browser-fallback-text';
+            derivedMetadata = parsedPdfFallback.metadata;
+            telemetryExtra = {
+              extract2mdLoadFailed: true,
+              extract2mdError: errorMessage.slice(0, 400),
+            };
+          } catch (browserFallbackError: any) {
+            shouldFallbackToServerParser = true;
+            telemetryExtra = {
+              extract2mdLoadFailed: true,
+              extract2mdError: errorMessage.slice(0, 400),
+              browserFallbackParseError: String(browserFallbackError?.message || browserFallbackError).slice(0, 400),
+            };
+            pushToast('Browser PDF fallback failed. Switching to backend parser.', 'info');
+          }
+        }
+
+        if (shouldFallbackToServerParser) {
+          const formData = new FormData();
+          formData.append('file', file);
+          formData.append('aiProvider', aiProvider);
+          formData.append('aiModel', aiModel);
+          setStatus('summarizing');
+          response = await fetch(`${apiBase}/api/analyze-book?extractCover=true`, {
+            method: 'POST',
+            body: formData,
+            signal: abortController.signal,
+          }).catch((error) => {
+            console.error('❌ Fetch error:', error);
+            if (error?.name === 'AbortError') {
+              throw new PdfConversionCancelledError();
+            }
+            throw new Error(`Network error: ${error.message}. This might be due to a corrupted or incompatible file format.`);
+          });
+        } else {
+          setPdfConversionMessage('Extracting cover preview from first page...');
+          coverImageDataUrl = await extractPdfCoverImage(file);
+
+          setStatus('summarizing');
+          setPdfConversionMessage('Markdown generated. Sending text to API for analysis...');
+          setPdfConversionProgress(100);
+          pushToast('Markdown extraction complete. Sending telemetry + text to API.', 'success');
+
+          response = await fetch(`${apiBase}/api/analyze-text?maxTextLength=200000`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              text: markdownText,
+              sourceType,
+              metadata: derivedMetadata,
+              fileName: file.name,
+              fileType: 'pdf',
+              coverImage: coverImageDataUrl,
+              aiProvider,
+              aiModel,
+              telemetry: {
+                conversionDurationMs: Date.now() - conversionStartedAt,
+                usedOcrFallback,
+                markdownLength: markdownText.length,
+                modeRequested: pdfMdMode,
+                ...telemetryExtra,
+              },
+            }),
+            signal: abortController.signal,
+          }).catch((error) => {
+            console.error('❌ Fetch error:', error);
+            if (error?.name === 'AbortError') {
+              throw new PdfConversionCancelledError();
+            }
+            throw new Error(`Network error: ${error.message}. This might be due to a corrupted or incompatible file format.`);
+          });
+        }
+      } else {
+        // Use the API file-upload parser path
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('aiProvider', aiProvider);
+        formData.append('aiModel', aiModel);
+
+        console.log('📦 FormData created, ready to send');
+        pushToast('File upload prepared. Sending to backend parser...', 'info');
+
+        setStatus('summarizing');
+
+        response = await fetch(`${apiBase}/api/analyze-book?extractCover=true`, {
+          method: 'POST',
+          body: formData,
+          signal: abortController.signal,
+        }).catch((error) => {
+          console.error('❌ Fetch error:', error);
+          if (error?.name === 'AbortError') {
+            throw new Error('Request cancelled by user.');
+          }
+          throw new Error(`Network error: ${error.message}. This might be due to a corrupted or incompatible file format.`);
+        });
+      }
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
@@ -697,19 +926,62 @@ export default function App() {
       setPageList(result.pageList ?? null);
       setCoverImageUrl(result.coverImage);
       setStatus('success');
+      if (fileType === 'pdf' && pdfWorkflow === 'browser-text') {
+        pushToast('PDF telemetry captured and analysis completed.', 'success');
+      } else {
+        pushToast('Analysis completed successfully.', 'success');
+      }
+      activeConversionAbortRef.current = null;
 
     } catch (err) {
       console.error(err);
+      if (err instanceof PdfConversionCancelledError) {
+        setErrorMessage('PDF conversion cancelled.');
+        setStatus('idle');
+        pushToast('PDF conversion cancelled.', 'info');
+        activeConversionAbortRef.current = null;
+        return;
+      }
       const message = err instanceof Error ? err.message : 'An unknown error occurred.';
       setErrorMessage(`Failed to generate analysis. ${message}`);
       setStatus('error');
+      if (fileType === 'pdf' && pdfWorkflow === 'browser-text') {
+        pushToast(`PDF processing failed: ${message}`, 'error');
+      } else {
+        pushToast(`Analysis failed: ${message}`, 'error');
+      }
+      activeConversionAbortRef.current = null;
     }
-  }, [file, fileType, aiProvider, aiModel]);
+  }, [file, fileType, aiProvider, aiModel, pdfWorkflow, pdfMdMode, enableOcrFallback, pushToast]);
+
+  const handleCancelConversion = useCallback(() => {
+    if (!activeConversionAbortRef.current) return;
+    activeConversionAbortRef.current.abort();
+    activeConversionAbortRef.current = null;
+    setPdfConversionMessage('Cancelling conversion...');
+    pushToast('Cancelling PDF conversion...', 'info');
+  }, [pushToast]);
 
   const isLoading = status === 'parsing' || status === 'summarizing';
 
   return (
     <div className={`max-w-6xl mx-auto p-4 md:p-8 space-y-8 pb-20 text-slate-900`}>
+      <div className="fixed top-4 right-4 z-[9999] space-y-2 pointer-events-none">
+        {toasts.map((toast) => (
+          <div
+            key={toast.id}
+            className={`min-w-[280px] max-w-[420px] rounded-lg border px-3 py-2 text-sm shadow-md bg-white ${
+              toast.level === 'success'
+                ? 'border-emerald-200 text-emerald-700'
+                : toast.level === 'error'
+                  ? 'border-red-200 text-red-700'
+                  : 'border-blue-200 text-blue-700'
+            }`}
+          >
+            {toast.message}
+          </div>
+        ))}
+      </div>
       <div className="w-full">
         <header className="space-y-3 mb-8">
           <div className="flex items-center gap-3">
@@ -745,10 +1017,95 @@ export default function App() {
                 isDark={isDark}
               />
               <div className="mt-4 space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                {fileType === 'pdf' && (
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <label htmlFor="pdf-workflow" className={`block text-xs font-semibold ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                        PDF Workflow
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setIsPdfWorkflowInfoOpen(true)}
+                        className="inline-flex items-center justify-center w-5 h-5 rounded-full border border-blue-200 text-blue-600 hover:bg-blue-50 transition-colors"
+                        aria-label="Learn about PDF workflow options"
+                        title="Learn about PDF workflow options"
+                      >
+                        <i className="fa-solid fa-circle-info text-xs"></i>
+                      </button>
+                    </div>
+                    <select
+                      id="pdf-workflow"
+                      value={pdfWorkflow}
+                      onChange={(event) => setPdfWorkflow(event.target.value as PdfWorkflow)}
+                      disabled={isLoading}
+                      className={`w-full rounded-md border px-3 py-2 text-sm ${isDark ? 'bg-slate-800 border-slate-600 text-slate-100' : 'bg-white border-slate-300 text-slate-900'}`}
+                    >
+                      {PDF_WORKFLOW_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                      ))}
+                    </select>
+                    <p className="mt-1 text-[11px] text-slate-500">
+                      Browser mode uses extract2md and posts Markdown text to `/api/analyze-text`.
+                    </p>
+                    {pdfWorkflow === 'browser-text' && (
+                      <div className="mt-3 space-y-2">
+                        <div>
+                          <label htmlFor="pdf-md-mode" className="block text-xs font-semibold mb-1 text-slate-700">
+                            Conversion Mode
+                          </label>
+                          <select
+                            id="pdf-md-mode"
+                            value={pdfMdMode}
+                            onChange={(event) => setPdfMdMode(event.target.value as PdfMdMode)}
+                            disabled={isLoading}
+                            className={`w-full rounded-md border px-3 py-2 text-sm ${isDark ? 'bg-slate-800 border-slate-600 text-slate-100' : 'bg-white border-slate-300 text-slate-900'}`}
+                          >
+                            {PDF_MD_MODE_OPTIONS.map((option) => (
+                              <option key={option.value} value={option.value}>{option.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <label className="inline-flex items-center gap-2 text-xs text-slate-600">
+                          <input
+                            type="checkbox"
+                            checked={enableOcrFallback}
+                            onChange={(event) => setEnableOcrFallback(event.target.checked)}
+                            disabled={isLoading || pdfMdMode !== 'quick'}
+                          />
+                          Retry with OCR if fast mode fails
+                        </label>
+                        {isLoading && status === 'parsing' && (
+                          <div className="space-y-1">
+                            <div className="h-2 w-full rounded bg-slate-200 overflow-hidden">
+                              <div
+                                className="h-full bg-blue-500 transition-all"
+                                style={{ width: `${Math.max(2, pdfConversionProgress)}%` }}
+                              />
+                            </div>
+                            <p className="text-[11px] text-slate-500">
+                              {pdfConversionMessage || 'Preparing PDF conversion...'}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
                 <div>
-                  <label htmlFor="ai-provider" className={`block text-xs font-semibold mb-1 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
-                    AI Provider
-                  </label>
+                  <div className="flex items-center gap-2 mb-1">
+                    <label htmlFor="ai-provider" className={`block text-xs font-semibold ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                      AI Provider
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setIsAiProviderInfoOpen(true)}
+                      className="inline-flex items-center justify-center w-5 h-5 rounded-full border border-blue-200 text-blue-600 hover:bg-blue-50 transition-colors"
+                      aria-label="Learn about AI provider options"
+                      title="Learn about AI provider options"
+                    >
+                      <i className="fa-solid fa-circle-info text-xs"></i>
+                    </button>
+                  </div>
                   <select
                     id="ai-provider"
                     value={aiProvider}
@@ -785,6 +1142,15 @@ export default function App() {
               >
                 {isLoading ? 'Processing...' : 'Generate Analysis'}
               </button>
+              {isLoading && fileType === 'pdf' && pdfWorkflow === 'browser-text' && status === 'parsing' && (
+                <button
+                  type="button"
+                  onClick={handleCancelConversion}
+                  className="w-full mt-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold py-2 px-4 rounded-xl transition-colors"
+                >
+                  Cancel Conversion
+                </button>
+              )}
               <MetadataDisplay metadata={metadata} isDark={isDark} />
             </div>
             
@@ -794,7 +1160,9 @@ export default function App() {
                   <Loader
                     message={status === 'summarizing'
                       ? `Analyzing and classifying with ${AI_PROVIDER_OPTIONS.find(option => option.value === aiProvider)?.label || 'AI'}...`
-                      : statusMessages[status]}
+                      : (fileType === 'pdf' && pdfWorkflow === 'browser-text' && pdfConversionMessage)
+                        ? pdfConversionMessage
+                        : statusMessages[status]}
                     isDark={isDark}
                   />
                 )}
@@ -830,6 +1198,125 @@ export default function App() {
         </footer>
       </div>
       <HowToGuideModal isOpen={isGuideOpen} onClose={() => setIsGuideOpen(false)} isDark={isDark} />
+      {isPdfWorkflowInfoOpen && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-900/50 p-4">
+          <div className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white shadow-xl">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
+              <h2 className="text-lg font-bold text-slate-900">Choosing a PDF Workflow</h2>
+              <button
+                type="button"
+                onClick={() => setIsPdfWorkflowInfoOpen(false)}
+                className="inline-flex items-center justify-center w-8 h-8 rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+                aria-label="Close PDF workflow help"
+              >
+                <i className="fa-solid fa-xmark"></i>
+              </button>
+            </div>
+            <div className="px-5 py-4 space-y-4 text-sm text-slate-700">
+              <div>
+                <p className="font-semibold text-slate-900">Server Parser (Current)</p>
+                <p>
+                  Best when you want the fastest, simplest upload-to-result flow. This path is usually very reliable
+                  for standard, text-based PDFs and requires the fewest choices.
+                </p>
+                <ul className="mt-2 space-y-1 list-disc pl-5">
+                  <li><span className="font-semibold">Pros:</span> Fast, simple, predictable for common PDFs.</li>
+                  <li><span className="font-semibold">Cons:</span> Can be weaker on image-only scans where text extraction is limited.</li>
+                </ul>
+              </div>
+              <div>
+                <p className="font-semibold text-slate-900">Browser Text -&gt; AI (Incremental)</p>
+                <p>
+                  Best when you need stronger extraction for difficult PDFs. This path can use OCR fallback, which may
+                  recover more readable content from scanned/image-heavy files and improve downstream analysis quality.
+                </p>
+                <ul className="mt-2 space-y-1 list-disc pl-5">
+                  <li><span className="font-semibold">Pros:</span> Better chance of useful text on hard/scanned PDFs (with OCR fallback).</li>
+                  <li><span className="font-semibold">Cons:</span> Slower, more browser memory/CPU use, and can still vary by file quality.</li>
+                </ul>
+              </div>
+              <div className="rounded-lg bg-blue-50 border border-blue-100 p-3 text-blue-900">
+                <p className="font-semibold">Quick Guidance</p>
+                <p>
+                  Start with <span className="font-semibold">Server Parser</span>. If results look thin, incomplete, or
+                  your PDF is scan-like, switch to <span className="font-semibold">Browser Text -&gt; AI</span> for a
+                  higher-effort extraction path.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {isAiProviderInfoOpen && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-900/50 p-4">
+          <div className="w-full max-w-3xl rounded-2xl border border-slate-200 bg-white shadow-xl max-h-[85vh] overflow-auto">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 sticky top-0 bg-white">
+              <h2 className="text-lg font-bold text-slate-900">Choosing an AI Provider and Model</h2>
+              <button
+                type="button"
+                onClick={() => setIsAiProviderInfoOpen(false)}
+                className="inline-flex items-center justify-center w-8 h-8 rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+                aria-label="Close AI provider help"
+              >
+                <i className="fa-solid fa-xmark"></i>
+              </button>
+            </div>
+            <div className="px-5 py-4 space-y-4 text-sm text-slate-700">
+              <div>
+                <p className="font-semibold text-slate-900">Google (Gemini)</p>
+                <p>
+                  A strong default for general cataloging workflows, especially when you want a balanced mix of speed and quality.
+                </p>
+                <ul className="mt-2 space-y-1 list-disc pl-5">
+                  <li><span className="font-semibold">Pros:</span> Good overall quality, good speed options (`Flash`) and stronger depth options (`Pro`).</li>
+                  <li><span className="font-semibold">Cons:</span> For nuanced edge cases, you may still want to compare outputs with another provider.</li>
+                  <li><span className="font-semibold">Best for:</span> Everyday metadata enrichment, mixed content, and broad first-pass analysis.</li>
+                </ul>
+              </div>
+
+              <div>
+                <p className="font-semibold text-slate-900">OpenAI</p>
+                <p>
+                  Often a strong choice when you need precise instruction-following and consistent structured outputs for downstream use.
+                </p>
+                <ul className="mt-2 space-y-1 list-disc pl-5">
+                  <li><span className="font-semibold">Pros:</span> Strong formatting reliability, strong coding/logic behavior, dependable schema-style outputs.</li>
+                  <li><span className="font-semibold">Cons:</span> Higher-capability models may cost more depending on your volume and selected model.</li>
+                  <li><span className="font-semibold">Best for:</span> Technical/nonfiction content, strict output shape needs, and repeatable processing pipelines.</li>
+                </ul>
+              </div>
+
+              <div>
+                <p className="font-semibold text-slate-900">Anthropic (Claude)</p>
+                <p>
+                  Often preferred for careful long-form reading and nuanced narrative understanding where tone and context matter.
+                </p>
+                <ul className="mt-2 space-y-1 list-disc pl-5">
+                  <li><span className="font-semibold">Pros:</span> Strong long-context handling and nuanced interpretation on dense passages.</li>
+                  <li><span className="font-semibold">Cons:</span> Depending on prompt and model, may be slower or more expensive than faster-tier alternatives.</li>
+                  <li><span className="font-semibold">Best for:</span> Literary analysis, thematic synthesis, and subtle subject/tone classification.</li>
+                </ul>
+              </div>
+
+              <div className="rounded-lg bg-blue-50 border border-blue-100 p-3 text-blue-900">
+                <p className="font-semibold">Practical Selection Strategy</p>
+                <p>
+                  Start with a fast model for first pass. If the summary or classifications look shallow, rerun the same file with a higher-capability model
+                  or a different provider and compare outputs before finalizing catalog records.
+                </p>
+              </div>
+
+              <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 text-slate-700">
+                <p className="font-semibold">Note</p>
+                <p>
+                  Model quality can vary by domain, prompt, and document type. The best choice is often empirical: test 2 providers on representative samples
+                  and standardize on what gives your team the most accurate metadata and subject classification quality.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

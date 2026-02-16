@@ -1,7 +1,7 @@
 import express from 'express';
 import multer from 'multer';
 import { body, query, validationResult } from 'express-validator';
-import { analyzeBook } from '../controllers/bookAnalysisController';
+import { analyzeBook, analyzeExtractedText } from '../controllers/bookAnalysisController';
 
 const router = express.Router();
 
@@ -37,6 +37,69 @@ const validateAnalyzeBookQuery = [
     .optional()
     .isInt({ min: 1000, max: 500000 })
     .withMessage('maxTextLength must be between 1000 and 500000 characters'),
+  body('aiProvider')
+    .optional()
+    .isIn(['google', 'gemini', 'openai', 'anthropic', 'claude'])
+    .withMessage('aiProvider must be one of: google, openai, anthropic'),
+  body('aiModel')
+    .optional()
+    .isString()
+    .isLength({ min: 1, max: 100 })
+    .withMessage('aiModel must be a non-empty string up to 100 characters'),
+];
+
+const validateAnalyzeTextBody = [
+  query('maxTextLength')
+    .optional()
+    .isInt({ min: 1000, max: 500000 })
+    .withMessage('maxTextLength must be between 1000 and 500000 characters'),
+  body('text')
+    .isString()
+    .isLength({ min: 1, max: 2000000 })
+    .withMessage('text is required and must be between 1 and 2000000 characters'),
+  body('sourceType')
+    .optional()
+    .isString()
+    .isLength({ min: 1, max: 100 })
+    .withMessage('sourceType must be a non-empty string up to 100 characters'),
+  body('fileName')
+    .optional()
+    .isString()
+    .isLength({ min: 1, max: 255 })
+    .withMessage('fileName must be a non-empty string up to 255 characters'),
+  body('fileType')
+    .optional()
+    .isString()
+    .isLength({ min: 1, max: 50 })
+    .withMessage('fileType must be a non-empty string up to 50 characters'),
+  body('coverImage')
+    .optional({ values: 'falsy' })
+    .isString()
+    .withMessage('coverImage must be a base64 image string when provided'),
+  body('metadata')
+    .optional()
+    .isObject()
+    .withMessage('metadata must be an object when provided'),
+  body('telemetry')
+    .optional()
+    .isObject()
+    .withMessage('telemetry must be an object when provided'),
+  body('telemetry.conversionDurationMs')
+    .optional()
+    .isInt({ min: 0, max: 3600000 })
+    .withMessage('telemetry.conversionDurationMs must be between 0 and 3600000'),
+  body('telemetry.usedOcrFallback')
+    .optional()
+    .isBoolean()
+    .withMessage('telemetry.usedOcrFallback must be a boolean'),
+  body('telemetry.markdownLength')
+    .optional()
+    .isInt({ min: 0, max: 5000000 })
+    .withMessage('telemetry.markdownLength must be between 0 and 5000000'),
+  body('telemetry.modeRequested')
+    .optional()
+    .isIn(['quick', 'ocr'])
+    .withMessage('telemetry.modeRequested must be one of: quick, ocr'),
   body('aiProvider')
     .optional()
     .isIn(['google', 'gemini', 'openai', 'anthropic', 'claude'])
@@ -86,6 +149,17 @@ router.post('/analyze-book',
   validateAnalyzeBookQuery,
   handleValidationErrors,
   analyzeBook
+);
+
+/**
+ * POST /api/analyze-text
+ *
+ * Analyze pre-extracted text/markdown (used for browser-side PDF -> MD workflows).
+ */
+router.post('/analyze-text',
+  validateAnalyzeTextBody,
+  handleValidationErrors,
+  analyzeExtractedText
 );
 
 // Multer and file validation error handler

@@ -237,6 +237,62 @@ const result = await response.json();
 
 ---
 
+### Analyze Extracted Text (Incremental PDF->MD Path)
+
+**POST** `/api/analyze-text`
+
+Analyze pre-extracted text/markdown content (for browser-side PDF conversion workflows).
+
+**Request:**
+- Method: `POST`
+- Content-Type: `application/json`
+- Body:
+  - `text` (required string) - Extracted content or markdown to analyze
+  - `sourceType` (optional string) - Example: `pdf-browser-text`, `pdf-md`
+  - `metadata` (optional object) - Pre-extracted metadata (title, author, etc.)
+  - `telemetry` (optional object) - Client conversion telemetry
+    - `conversionDurationMs` (number)
+    - `usedOcrFallback` (boolean)
+    - `markdownLength` (number)
+    - `modeRequested` (`quick|ocr`)
+  - `coverImage` (optional string) - Base64/Data URL image for UI display
+  - `fileName` (optional string)
+  - `fileType` (optional string)
+  - `aiProvider` (optional) - `google|openai|anthropic`
+  - `aiModel` (optional)
+- Query Parameters (optional):
+  - `maxTextLength` (number, default: `200000`) - Maximum text length for analysis (1000-500000 characters)
+
+**Example using JavaScript/Fetch:**
+```javascript
+const response = await fetch('http://localhost:3001/api/analyze-text?maxTextLength=200000', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    text: markdownText,
+    sourceType: 'pdf-md',
+    metadata: { title: 'My PDF Title', author: 'Author Name' },
+    fileName: 'book.pdf',
+    fileType: 'pdf',
+    aiProvider: 'google',
+    aiModel: 'gemini-2.5-flash'
+  })
+});
+
+const result = await response.json();
+```
+
+**Response (200 OK):**
+- Same core response shape as `/api/analyze-book`:
+  - `metadata` (merged input metadata + AI classifications + readability)
+  - `summary`
+  - `tableOfContents` (`null` for this endpoint)
+  - `pageList` (`null` for this endpoint)
+  - `coverImage` (pass-through if provided)
+  - `aiProvider`, `aiModel`
+
+---
+
 ## Running the Server
 
 ### Development Mode (with auto-reload)

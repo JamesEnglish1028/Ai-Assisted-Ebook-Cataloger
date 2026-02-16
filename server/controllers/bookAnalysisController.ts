@@ -7,6 +7,14 @@ import { calculateFleschKincaid, calculateGunningFog } from '../services/textAna
 // Simple in-memory cache (in production, use Redis or similar)
 const analysisCache = new Map<string, any>();
 const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+const DEFAULT_MAX_TEXT_LENGTH = 200000;
+
+const parseRequestedMaxTextLength = (req: Request): number => {
+  const requestedMaxTextLength = typeof req.query.maxTextLength === 'string'
+    ? parseInt(req.query.maxTextLength, 10)
+    : NaN;
+  return Number.isFinite(requestedMaxTextLength) ? requestedMaxTextLength : DEFAULT_MAX_TEXT_LENGTH;
+};
 
 /**
  * Controller to handle book analysis requests
@@ -73,10 +81,7 @@ export async function analyzeBook(req: Request, res: Response, next: NextFunctio
     // Generate cache key from file hash and options
     const fileHash = crypto.createHash('md5').update(file.buffer).digest('hex');
     const extractCover = req.query.extractCover === 'true';
-    const requestedMaxTextLength = typeof req.query.maxTextLength === 'string'
-      ? parseInt(req.query.maxTextLength, 10)
-      : NaN;
-    const maxTextLength = Number.isFinite(requestedMaxTextLength) ? requestedMaxTextLength : 200000;
+    const maxTextLength = parseRequestedMaxTextLength(req);
     const cacheKey = `${fileHash}_${extractCover}_${maxTextLength}_${aiSelection.provider}_${aiSelection.model}`;
     
     // Check cache first
@@ -201,5 +206,146 @@ export async function analyzeBook(req: Request, res: Response, next: NextFunctio
     }
 
     res.status(500).json(errorResponse);
+  }
+}
+
+/**
+ * Controller to analyze pre-extracted text/markdown payloads.
+ * Incremental bridge for browser-based PDF -> MD workflows.
+ */
+export async function analyzeExtractedText(req: Request, res: Response, next: NextFunction) {
+  console.log('🎯 analyzeExtractedText controller called');
+  const startTime = Date.now();
+
+  try {
+    const rawText = typeof req.body?.text === 'string' ? req.body.text : '';
+    const sourceType = typeof req.body?.sourceType === 'string' ? req.body.sourceType : 'text';
+    const fileName = typeof req.body?.fileName === 'string' ? req.body.fileName : 'uploaded-text.md';
+    const fileType = typeof req.body?.fileType === 'string' ? req.body.fileType : 'pdf';
+    const coverImage = typeof req.body?.coverImage === 'string' ? req.body.coverImage : null;
+    const maxTextLength = parseRequestedMaxTextLength(req);
+
+    const aiSelection = resolveAISelection(
+      typeof req.body?.aiProvider === 'string' ? req.body.aiProvider : undefined,
+      typeof req.body?.aiModel === 'string' ? req.body.aiModel : undefined
+    );
+
+    let text = rawText.trim();
+    if (!text) {
+      return res.status(400).json({
+        error: 'No extracted text provided',
+        code: 'TEXT_REQUIRED',
+        message: 'Provide non-empty extracted text or markdown in request body.text',
+      });
+    }
+
+    if (text.length > maxTextLength) {
+      console.warn(`Extracted text truncated to ${maxTextLength} characters.`);
+      text = text.substring(0, maxTextLength);
+    }
+
+    const metadataInput = req.body?.metadata;
+    const metadata = (metadataInput && typeof metadataInput === 'object' && !Array.isArray(metadataInput))
+      ? metadataInput as Record<string, unknown>
+      : {};
+    const telemetryInput = req.body?.telemetry;
+    const telemetry = (telemetryInput && typeof telemetryInput === 'object' && !Array.isArray(telemetryInput))
+      ? telemetryInput as Record<string, unknown>
+      : undefined;
+
+    if (telemetry) {
+      console.log('📊 Text extraction telemetry:', telemetry);
+    }
+
+    const hashInput = JSON.stringify({
+      text,
+      metadata,
+      sourceType,
+      provider: aiSelection.provider,
+      model: aiSelection.model,
+      maxTextLength,
+    });
+    const textHash = crypto.createHash('md5').update(hashInput).digest('hex');
+    const cacheKey = `text_${textHash}`;
+
+    const cached = analysisCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+      console.log('🎯 Returning cached text-analysis result');
+      return res.json({
+        ...cached.result,
+        cached: true,
+        cacheAge: Math.round((Date.now() - cached.timestamp) / 1000 / 60),
+      });
+    }
+
+    const fleschKincaid = calculateFleschKincaid(text);
+    const gunningFog = calculateGunningFog(text);
+
+    console.log(`🤖 Analyzing extracted text with ${aiSelection.provider} (${aiSelection.model})...`);
+
+    let analysis;
+    try {
+      analysis = await generateBookAnalysisWithProvider(text, aiSelection);
+    } catch (aiError: any) {
+      console.error('❌ AI analysis failed:', aiError.message);
+      return res.status(503).json({
+        error: 'AI analysis failed',
+        code: 'AI_SERVICE_ERROR',
+        message: 'Unable to generate analysis at this time. Please try again later.',
+      });
+    }
+
+    const result = {
+      metadata: {
+        ...metadata,
+        lcc: analysis.lcc,
+        bisac: analysis.bisac,
+        lcsh: analysis.lcsh,
+        fieldOfStudy: analysis.fieldOfStudy,
+        discipline: analysis.discipline,
+        readingLevel: fleschKincaid ?? undefined,
+        gunningFog: gunningFog ?? undefined,
+      },
+      summary: analysis.summary,
+      tableOfContents: null,
+      pageList: null,
+      coverImage,
+      fileName,
+      fileType,
+      sourceType,
+      extractionTelemetry: telemetry ?? null,
+      aiProvider: aiSelection.provider,
+      aiModel: aiSelection.model,
+      processedAt: new Date().toISOString(),
+      processingTime: `${((Date.now() - startTime) / 1000).toFixed(2)}s`,
+    };
+
+    analysisCache.set(cacheKey, {
+      result,
+      timestamp: Date.now(),
+    });
+
+    if (Math.random() < 0.1) {
+      for (const [key, value] of analysisCache.entries()) {
+        if (Date.now() - value.timestamp > CACHE_TTL) {
+          analysisCache.delete(key);
+        }
+      }
+    }
+
+    return res.json(result);
+  } catch (error: any) {
+    console.error('❌ Unexpected error analyzing extracted text:', error);
+    return res.status(500).json({
+      error: 'Internal server error',
+      code: 'INTERNAL_ERROR',
+      message: 'An unexpected error occurred while processing extracted text',
+      ...(process.env.NODE_ENV === 'development' && {
+        details: {
+          message: error.message,
+          stack: error.stack,
+        },
+      }),
+    });
   }
 }
