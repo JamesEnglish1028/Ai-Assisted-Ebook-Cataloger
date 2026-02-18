@@ -40,6 +40,11 @@ type ToastMessage = {
   level: ToastLevel;
 };
 
+type PersistedError = {
+  message: string;
+  timestamp: number;
+};
+
 const statusMessages: Record<Status, string> = {
   idle: '',
   parsing: 'Parsing your ebook... This may take a moment for large files.',
@@ -69,6 +74,9 @@ const PDF_MD_MODE_OPTIONS: Array<{ value: PdfMdMode; label: string }> = [
   { value: 'quick', label: 'Fast (PDF text layer)' },
   { value: 'ocr', label: 'High Accuracy OCR (slower)' },
 ];
+
+const API_REQUEST_TIMEOUT_MS = 90000;
+const PERSISTED_ERROR_KEY = 'aiCataloger.persistentErrorBanner';
 
 
 // Helper function to find a valid ISBN-10 or ISBN-13 from a string.
@@ -110,6 +118,7 @@ export default function App() {
   const [isGuideOpen, setIsGuideOpen] = useState<boolean>(false);
   const [isPdfWorkflowInfoOpen, setIsPdfWorkflowInfoOpen] = useState<boolean>(false);
   const [isAiProviderInfoOpen, setIsAiProviderInfoOpen] = useState<boolean>(false);
+  const [persistentErrorBanner, setPersistentErrorBanner] = useState<string>('');
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const activeConversionAbortRef = useRef<AbortController | null>(null);
   const toastIdRef = useRef(0);
@@ -139,6 +148,120 @@ export default function App() {
       setToasts((prev) => prev.filter((toast) => toast.id !== id));
     }, 4200);
     toastTimeoutsRef.current.push(timeoutId);
+  }, []);
+
+  const persistErrorBanner = useCallback((message: string) => {
+    setPersistentErrorBanner(message);
+    try {
+      const payload: PersistedError = { message, timestamp: Date.now() };
+      window.sessionStorage.setItem(PERSISTED_ERROR_KEY, JSON.stringify(payload));
+    } catch {
+      // Non-fatal if sessionStorage is unavailable.
+    }
+  }, []);
+
+  const clearPersistentErrorBanner = useCallback(() => {
+    setPersistentErrorBanner('');
+    try {
+      window.sessionStorage.removeItem(PERSISTED_ERROR_KEY);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      const raw = window.sessionStorage.getItem(PERSISTED_ERROR_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as PersistedError;
+      if (!parsed?.message) return;
+
+      const isFresh = Date.now() - parsed.timestamp < 24 * 60 * 60 * 1000;
+      if (isFresh) {
+        setPersistentErrorBanner(parsed.message);
+      } else {
+        window.sessionStorage.removeItem(PERSISTED_ERROR_KEY);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const mapApiErrorMessage = useCallback((status: number, payload: any): string => {
+    const code = typeof payload?.code === 'string' ? payload.code : '';
+    const payloadMessage = typeof payload?.message === 'string'
+      ? payload.message
+      : typeof payload?.error === 'string'
+        ? payload.error
+        : '';
+
+    if (status === 401 || status === 403) {
+      return payloadMessage || 'The API rejected the request. Verify your API key configuration and try again.';
+    }
+    if (status === 408) {
+      return 'The request timed out on the server. Please retry.';
+    }
+    if (status === 413) {
+      return payloadMessage || 'The uploaded content is too large to analyze.';
+    }
+    if (status === 422) {
+      return payloadMessage || 'We could not extract readable content from this file. It may be malformed, DRM-protected, or unsupported.';
+    }
+    if (status === 429) {
+      return 'Too many requests right now. Please wait a few minutes and try again.';
+    }
+    if (status === 503 || code === 'AI_SERVICE_ERROR') {
+      return 'The analysis service is temporarily unavailable. Please retry shortly.';
+    }
+    if (status === 500 || status === 502 || status === 504) {
+      return 'The analysis API returned a server error. Please retry in a moment.';
+    }
+    if (status === 400 && code === 'FILE_VALIDATION_ERROR') {
+      return payloadMessage || 'The uploaded file did not pass validation.';
+    }
+    if (status === 400 && code === 'TEXT_REQUIRED') {
+      return payloadMessage || 'No extracted text was provided to the analysis endpoint.';
+    }
+    if (payloadMessage) {
+      return payloadMessage;
+    }
+    return `Server error: ${status}`;
+  }, []);
+
+  const parseErrorPayload = useCallback(async (response: Response): Promise<any> => {
+    const contentType = response.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      return await response.json().catch(() => null);
+    }
+
+    const responseText = await response.text().catch(() => '');
+    if (!responseText) return null;
+    return {
+      message: responseText.length > 600 ? `${responseText.slice(0, 600)}...` : responseText,
+    };
+  }, []);
+
+  const fetchWithTimeout = useCallback(async (
+    url: string,
+    init: RequestInit,
+    abortController: AbortController,
+  ): Promise<Response> => {
+    let didTimeout = false;
+    const timeoutId = window.setTimeout(() => {
+      didTimeout = true;
+      abortController.abort();
+    }, API_REQUEST_TIMEOUT_MS);
+
+    try {
+      return await fetch(url, { ...init, signal: abortController.signal });
+    } catch (error: any) {
+      if (error?.name === 'AbortError' && didTimeout) {
+        throw new Error('__REQUEST_TIMEOUT__');
+      }
+      throw error;
+    } finally {
+      window.clearTimeout(timeoutId);
+    }
   }, []);
 
   useEffect(() => {
@@ -837,17 +960,10 @@ export default function App() {
           formData.append('aiProvider', aiProvider);
           formData.append('aiModel', aiModel);
           setStatus('summarizing');
-          response = await fetch(`${apiBase}/api/analyze-book?extractCover=true`, {
+          response = await fetchWithTimeout(`${apiBase}/api/analyze-book?extractCover=true`, {
             method: 'POST',
             body: formData,
-            signal: abortController.signal,
-          }).catch((error) => {
-            console.error('❌ Fetch error:', error);
-            if (error?.name === 'AbortError') {
-              throw new PdfConversionCancelledError();
-            }
-            throw new Error(`Network error: ${error.message}. This might be due to a corrupted or incompatible file format.`);
-          });
+          }, abortController);
         } else {
           setPdfConversionMessage('Extracting cover preview from first page...');
           coverImageDataUrl = await extractPdfCoverImage(file);
@@ -857,7 +973,7 @@ export default function App() {
           setPdfConversionProgress(100);
           pushToast('Markdown extraction complete. Sending telemetry + text to API.', 'success');
 
-          response = await fetch(`${apiBase}/api/analyze-text?maxTextLength=200000`, {
+          response = await fetchWithTimeout(`${apiBase}/api/analyze-text?maxTextLength=200000`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -879,14 +995,7 @@ export default function App() {
                 ...telemetryExtra,
               },
             }),
-            signal: abortController.signal,
-          }).catch((error) => {
-            console.error('❌ Fetch error:', error);
-            if (error?.name === 'AbortError') {
-              throw new PdfConversionCancelledError();
-            }
-            throw new Error(`Network error: ${error.message}. This might be due to a corrupted or incompatible file format.`);
-          });
+          }, abortController);
         }
       } else {
         // Use the API file-upload parser path
@@ -900,25 +1009,23 @@ export default function App() {
 
         setStatus('summarizing');
 
-        response = await fetch(`${apiBase}/api/analyze-book?extractCover=true`, {
+        response = await fetchWithTimeout(`${apiBase}/api/analyze-book?extractCover=true`, {
           method: 'POST',
           body: formData,
-          signal: abortController.signal,
-        }).catch((error) => {
-          console.error('❌ Fetch error:', error);
-          if (error?.name === 'AbortError') {
-            throw new Error('Request cancelled by user.');
-          }
-          throw new Error(`Network error: ${error.message}. This might be due to a corrupted or incompatible file format.`);
-        });
+        }, abortController);
       }
       
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        throw new Error(errorData.message || errorData.error || `Server error: ${response.status}`);
+        const errorPayload = await parseErrorPayload(response);
+        throw new Error(mapApiErrorMessage(response.status, errorPayload));
       }
-      
-      const result = await response.json();
+
+      let result: any;
+      try {
+        result = await response.json();
+      } catch {
+        throw new Error('The server returned an unexpected response. Please retry.');
+      }
       
       setSummary(result.summary);
       setMetadata(result.metadata);
@@ -931,6 +1038,7 @@ export default function App() {
       } else {
         pushToast('Analysis completed successfully.', 'success');
       }
+      clearPersistentErrorBanner();
       activeConversionAbortRef.current = null;
 
     } catch (err) {
@@ -942,8 +1050,16 @@ export default function App() {
         activeConversionAbortRef.current = null;
         return;
       }
-      const message = err instanceof Error ? err.message : 'An unknown error occurred.';
+      let message = err instanceof Error ? err.message : 'An unknown error occurred.';
+      if (message === '__REQUEST_TIMEOUT__') {
+        message = 'Analysis is taking longer than expected. The server may be busy. Please try again in a moment.';
+      } else if (message.includes('Failed to fetch') || message.includes('NetworkError')) {
+        message = 'Unable to reach the analysis API. Check your network connection and API/CORS configuration.';
+      } else if (err instanceof DOMException && err.name === 'AbortError') {
+        message = 'The request was interrupted before completion.';
+      }
       setErrorMessage(`Failed to generate analysis. ${message}`);
+      persistErrorBanner(`Failed to generate analysis. ${message}`);
       setStatus('error');
       if (fileType === 'pdf' && pdfWorkflow === 'browser-text') {
         pushToast(`PDF processing failed: ${message}`, 'error');
@@ -952,7 +1068,7 @@ export default function App() {
       }
       activeConversionAbortRef.current = null;
     }
-  }, [file, fileType, aiProvider, aiModel, pdfWorkflow, pdfMdMode, enableOcrFallback, pushToast]);
+  }, [file, fileType, aiProvider, aiModel, pdfWorkflow, pdfMdMode, enableOcrFallback, pushToast, fetchWithTimeout, mapApiErrorMessage, parseErrorPayload, clearPersistentErrorBanner, persistErrorBanner]);
 
   const handleCancelConversion = useCallback(() => {
     if (!activeConversionAbortRef.current) return;
@@ -1004,6 +1120,22 @@ export default function App() {
             Open One-Page How-To Guide
           </button>
         </header>
+
+        {persistentErrorBanner && (
+          <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-800">
+            <div className="flex items-start justify-between gap-4">
+              <p className="text-sm font-medium">{persistentErrorBanner}</p>
+              <button
+                type="button"
+                onClick={clearPersistentErrorBanner}
+                className="shrink-0 rounded-md border border-red-200 bg-white px-2.5 py-1 text-xs font-semibold text-red-700 hover:bg-red-100 transition-colors"
+                aria-label="Dismiss persistent error banner"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        )}
 
         <main className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
           <div className="flex flex-col lg:flex-row items-start gap-6">
