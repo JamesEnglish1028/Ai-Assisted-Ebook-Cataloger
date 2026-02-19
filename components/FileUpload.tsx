@@ -1,6 +1,6 @@
 import React, { useCallback, useState, useEffect } from 'react';
 
-type FileType = 'pdf' | 'epub';
+type FileType = 'pdf' | 'epub' | 'audiobook';
 
 interface FileUploadProps {
   file: File | null;
@@ -20,6 +20,13 @@ const PdfIcon: React.FC = () => (
 const EpubIcon: React.FC = () => (
   <svg className="w-12 h-12 text-cyan-400" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
     <path fillRule="evenodd" clipRule="evenodd" d="M18 2H6C4.89543 2 4 2.89543 4 4V20C4 21.1046 4.89543 22 6 22H18C19.1046 22 20 21.1046 20 20V4C20 2.89543 19.1046 2 18 2ZM11 4H6V12.5L8.5 11L11 12.5V4ZM13 18V16H18V18H13ZM13 14V12H18V14H13ZM13 10V8H18V10H13Z" />
+  </svg>
+);
+
+const AudioIcon: React.FC = () => (
+  <svg className="w-12 h-12 text-cyan-400" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+    <path d="M14 4.5a1 1 0 0 1 1.447-.894l4 2A1 1 0 0 1 20 6.5V15a4 4 0 1 1-2-3.465V7.118l-2-1V13a4 4 0 1 1-2-3.465V4.5Z" />
+    <path d="M7 4a1 1 0 0 1 1 1v8.535A4 4 0 1 1 6 13V5a1 1 0 0 1 1-1Z" />
   </svg>
 );
 
@@ -67,7 +74,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ file, fileType, onFileCh
       // If size is 0 and no type, it might be a directory
       if (selectedFile.size === 0 && !selectedFile.type) {
         console.warn('⚠️ Possible directory selected, rejecting');
-        alert('Please select a valid EPUB or PDF file, not a folder.');
+        alert('Please select a valid PDF, EPUB, or audiobook file, not a folder.');
         e.target.value = '';
         return;
       }
@@ -92,14 +99,22 @@ export const FileUpload: React.FC<FileUploadProps> = ({ file, fileType, onFileCh
     }
   };
 
-  const acceptedMimeTypes = fileType === 'pdf' ? 'application/pdf' : 'application/epub+zip';
-  const acceptedExtension = fileType === 'pdf' ? '.pdf' : '.epub';
+  const acceptedMimeTypes = fileType === 'pdf'
+    ? 'application/pdf'
+    : fileType === 'epub'
+      ? 'application/epub+zip'
+      : 'audio/mpeg,audio/mp4,audio/x-m4a,audio/wav,audio/x-wav,application/audiobook+zip';
+  const acceptedExtension = fileType === 'pdf'
+    ? '.pdf'
+    : fileType === 'epub'
+      ? '.epub'
+      : '.mp3,.m4b,.wav,.audiobook';
 
   const renderContent = () => {
     if (showSuccess) {
       return (
         <div className="flex flex-col items-center justify-center animate-fade-in text-center">
-          {fileType === 'pdf' ? <PdfIcon /> : <EpubIcon />}
+          {fileType === 'pdf' ? <PdfIcon /> : fileType === 'epub' ? <EpubIcon /> : <AudioIcon />}
           <p className={`mt-2 text-sm font-semibold ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>File accepted!</p>
         </div>
       );
@@ -115,7 +130,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ file, fileType, onFileCh
       <>
         <svg className="w-10 h-10 mb-3 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-4-4V6a4 4 0 014-4h1.586a1 1 0 01.707.293l1.414 1.414a1 1 0 00.707.293H13.5a4 4 0 014 4v1.586a1 1 0 01-.293.707l-1.414 1.414a1 1 0 00-.293.707V16m-7-5l3-3m0 0l3 3m-3-3v12"></path></svg>
         <p className={`mb-2 text-sm ${isDark ? 'text-slate-400' : 'text-slate-600'}`}><span className="font-semibold">Click to upload</span> or drag and drop</p>
-        <p className="text-xs text-slate-500">{fileType.toUpperCase()} only</p>
+        <p className="text-xs text-slate-500">{fileType === 'audiobook' ? 'AUDIO only' : `${fileType.toUpperCase()} only`}</p>
       </>
     );
   };
@@ -139,6 +154,14 @@ export const FileUpload: React.FC<FileUploadProps> = ({ file, fileType, onFileCh
             aria-pressed={fileType === 'epub' ? 'true' : 'false'}
           >
             EPUB
+          </button>
+          <button
+            onClick={() => onFileTypeChange('audiobook')}
+            disabled={disabled}
+            className={`px-4 py-1 rounded-lg text-sm font-semibold transition-colors duration-200 ${fileType === 'audiobook' ? 'bg-blue-600 text-white' : 'text-slate-700 hover:bg-slate-200'}` }
+            aria-pressed={fileType === 'audiobook' ? 'true' : 'false'}
+          >
+            Audio
           </button>
         </div>
       </div>

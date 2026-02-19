@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { FileUpload } from './components/FileUpload';
 import { Loader } from './components/Loader';
 import { SummaryDisplay } from './components/SummaryDisplay';
@@ -18,10 +18,11 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 
 type Status = 'idle' | 'parsing' | 'summarizing' | 'success' | 'error';
-type FileType = 'pdf' | 'epub';
+type FileType = 'pdf' | 'epub' | 'audiobook';
 type AIProvider = 'google' | 'openai' | 'anthropic';
 type PdfWorkflow = 'server-parser' | 'browser-text';
 type PdfMdMode = 'quick' | 'ocr';
+type AudioTranscriptionMode = 'metadata-only' | 'transcribe-preview' | 'transcribe-full';
 type ToastLevel = 'info' | 'success' | 'error';
 
 type OmittedMetadata = 'lcc' | 'bisac' | 'lcsh' | 'fieldOfStudy' | 'discipline' | 'readingLevel' | 'gunningFog';
@@ -45,9 +46,20 @@ type PersistedError = {
   timestamp: number;
 };
 
+type AudioTranscriptionTelemetry = {
+  mode?: string;
+  provider?: string;
+  model?: string;
+  minutesUsed?: number;
+  estimatedCostUsd?: number;
+  truncated?: boolean;
+  transcriptCharacters?: number;
+  includeTimestamps?: boolean;
+} | null;
+
 const statusMessages: Record<Status, string> = {
   idle: '',
-  parsing: 'Parsing your ebook... This may take a moment for large files.',
+  parsing: 'Parsing your file... This may take a moment for large files.',
   summarizing: 'Analyzing and classifying with AI...',
   success: 'Analysis generated!',
   error: 'An error occurred.',
@@ -73,6 +85,12 @@ const PDF_WORKFLOW_OPTIONS: Array<{ value: PdfWorkflow; label: string }> = [
 const PDF_MD_MODE_OPTIONS: Array<{ value: PdfMdMode; label: string }> = [
   { value: 'quick', label: 'Fast (PDF text layer)' },
   { value: 'ocr', label: 'High Accuracy OCR (slower)' },
+];
+
+const AUDIO_TRANSCRIPTION_OPTIONS: Array<{ value: AudioTranscriptionMode; label: string }> = [
+  { value: 'metadata-only', label: 'Metadata Only (No Transcription)' },
+  { value: 'transcribe-preview', label: 'Transcribe Preview (lower cost)' },
+  { value: 'transcribe-full', label: 'Transcribe Full Audio' },
 ];
 
 const API_REQUEST_TIMEOUT_MS = 90000;
@@ -108,6 +126,9 @@ export default function App() {
   const [pdfConversionMessage, setPdfConversionMessage] = useState<string>('');
   const [aiProvider, setAiProvider] = useState<AIProvider>('google');
   const [aiModel, setAiModel] = useState<string>(AI_MODEL_OPTIONS.google[0]);
+  const [audioTranscriptionMode, setAudioTranscriptionMode] = useState<AudioTranscriptionMode>('metadata-only');
+  const [audioTranscriptionMaxMinutes, setAudioTranscriptionMaxMinutes] = useState<number>(10);
+  const [audioTranscriptionIncludeTimestamps, setAudioTranscriptionIncludeTimestamps] = useState<boolean>(false);
   const [status, setStatus] = useState<Status>('idle');
   const [summary, setSummary] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string>('');
@@ -115,6 +136,7 @@ export default function App() {
   const [metadata, setMetadata] = useState<FileMetadata | null>(null);
   const [tableOfContents, setTableOfContents] = useState<TocItem[] | null>(null);
   const [pageList, setPageList] = useState<PageListItem[] | null>(null);
+  const [audioTranscriptionTelemetry, setAudioTranscriptionTelemetry] = useState<AudioTranscriptionTelemetry>(null);
   const [isGuideOpen, setIsGuideOpen] = useState<boolean>(false);
   const [isPdfWorkflowInfoOpen, setIsPdfWorkflowInfoOpen] = useState<boolean>(false);
   const [isAiProviderInfoOpen, setIsAiProviderInfoOpen] = useState<boolean>(false);
@@ -222,6 +244,12 @@ export default function App() {
     if (status === 400 && code === 'TEXT_REQUIRED') {
       return payloadMessage || 'No extracted text was provided to the analysis endpoint.';
     }
+    if (status === 400 && code === 'TRANSCRIPTION_MODE_UNSUPPORTED') {
+      return payloadMessage || 'The selected provider does not support the requested audiobook transcription mode.';
+    }
+    if (status === 422 && code === 'AUDIO_TRANSCRIPTION_ERROR') {
+      return payloadMessage || 'Audiobook transcription failed. Try metadata-only or reduce transcription minutes.';
+    }
     if (payloadMessage) {
       return payloadMessage;
     }
@@ -271,6 +299,29 @@ export default function App() {
     }
   }, [aiProvider, aiModel]);
 
+  useEffect(() => {
+    if (fileType !== 'audiobook') return;
+    if (aiProvider === 'anthropic' && audioTranscriptionMode !== 'metadata-only') {
+      setAudioTranscriptionMode('metadata-only');
+      pushToast('Anthropic currently supports metadata-only audiobook workflow in this app.', 'info');
+    }
+  }, [fileType, aiProvider, audioTranscriptionMode, pushToast]);
+
+  const supportsAudioTranscription = aiProvider !== 'anthropic';
+  const audioMinuteLimit = audioTranscriptionMode === 'transcribe-full' ? 240 : 20;
+  useEffect(() => {
+    setAudioTranscriptionMaxMinutes((prev) => {
+      if (audioTranscriptionMode === 'metadata-only') return prev;
+      return Math.max(1, Math.min(audioMinuteLimit, prev));
+    });
+  }, [audioTranscriptionMode, audioMinuteLimit]);
+
+  const estimatedAudioCost = useMemo(() => {
+    if (audioTranscriptionMode === 'metadata-only') return 0;
+    const ratePerMinute = aiProvider === 'openai' ? 0.006 : aiProvider === 'google' ? 0.004 : 0;
+    return Number((audioTranscriptionMaxMinutes * ratePerMinute).toFixed(2));
+  }, [audioTranscriptionMode, aiProvider, audioTranscriptionMaxMinutes]);
+
 
   const handleFileTypeChange = (newType: FileType) => {
     if (fileType !== newType) {
@@ -282,6 +333,7 @@ export default function App() {
       setMetadata(null);
       setTableOfContents(null);
       setPageList(null);
+      setAudioTranscriptionTelemetry(null);
       setStatus('idle');
       setPdfConversionProgress(0);
       setPdfConversionMessage('');
@@ -290,11 +342,24 @@ export default function App() {
 
   const handleFileChange = (selectedFile: File | null) => {
     if (selectedFile) {
+        const lowerName = selectedFile.name.toLowerCase();
         const isPdf = selectedFile.type === 'application/pdf' && fileType === 'pdf';
         // EPUB mime type can be inconsistent, so check extension too
-        const isEpub = (selectedFile.type === 'application/epub+zip' || selectedFile.name.toLowerCase().endsWith('.epub')) && fileType === 'epub';
+        const isEpub = (selectedFile.type === 'application/epub+zip' || lowerName.endsWith('.epub')) && fileType === 'epub';
+        const isAudiobook = (
+          selectedFile.type === 'audio/mpeg' ||
+          selectedFile.type === 'audio/mp4' ||
+          selectedFile.type === 'audio/x-m4a' ||
+          selectedFile.type === 'audio/wav' ||
+          selectedFile.type === 'audio/x-wav' ||
+          selectedFile.type === 'application/audiobook+zip' ||
+          lowerName.endsWith('.mp3') ||
+          lowerName.endsWith('.m4b') ||
+          lowerName.endsWith('.wav') ||
+          lowerName.endsWith('.audiobook')
+        ) && fileType === 'audiobook';
 
-        if (isPdf || isEpub) {
+        if (isPdf || isEpub || isAudiobook) {
             setFile(selectedFile);
             setStatus('idle');
             setSummary('');
@@ -302,6 +367,7 @@ export default function App() {
             setMetadata(null);
             setTableOfContents(null);
             setPageList(null);
+            setAudioTranscriptionTelemetry(null);
             setErrorMessage('');
             setPdfConversionProgress(0);
             setPdfConversionMessage('');
@@ -852,6 +918,7 @@ export default function App() {
     setMetadata(null);
     setTableOfContents(null);
     setPageList(null);
+    setAudioTranscriptionTelemetry(null);
     setPdfConversionProgress(0);
     setPdfConversionMessage('');
     
@@ -959,6 +1026,11 @@ export default function App() {
           formData.append('file', file);
           formData.append('aiProvider', aiProvider);
           formData.append('aiModel', aiModel);
+          if (fileType === 'audiobook') {
+            formData.append('transcriptionMode', audioTranscriptionMode);
+            formData.append('transcriptionMaxMinutes', String(audioTranscriptionMaxMinutes));
+            formData.append('transcriptionIncludeTimestamps', String(audioTranscriptionIncludeTimestamps));
+          }
           setStatus('summarizing');
           response = await fetchWithTimeout(`${apiBase}/api/analyze-book?extractCover=true`, {
             method: 'POST',
@@ -1003,6 +1075,11 @@ export default function App() {
         formData.append('file', file);
         formData.append('aiProvider', aiProvider);
         formData.append('aiModel', aiModel);
+        if (fileType === 'audiobook') {
+          formData.append('transcriptionMode', audioTranscriptionMode);
+          formData.append('transcriptionMaxMinutes', String(audioTranscriptionMaxMinutes));
+          formData.append('transcriptionIncludeTimestamps', String(audioTranscriptionIncludeTimestamps));
+        }
 
         console.log('📦 FormData created, ready to send');
         pushToast('File upload prepared. Sending to backend parser...', 'info');
@@ -1031,8 +1108,15 @@ export default function App() {
       setMetadata(result.metadata);
       setTableOfContents(result.tableOfContents ?? null);
       setPageList(result.pageList ?? null);
+      setAudioTranscriptionTelemetry(result.transcription ?? null);
       setCoverImageUrl(result.coverImage);
       setStatus('success');
+      if (result?.transcription) {
+        pushToast(
+          `Transcription used ${result.transcription.minutesUsed || 0} min (est $${Number(result.transcription.estimatedCostUsd || 0).toFixed(2)}).`,
+          'info',
+        );
+      }
       if (fileType === 'pdf' && pdfWorkflow === 'browser-text') {
         pushToast('PDF telemetry captured and analysis completed.', 'success');
       } else {
@@ -1068,7 +1152,7 @@ export default function App() {
       }
       activeConversionAbortRef.current = null;
     }
-  }, [file, fileType, aiProvider, aiModel, pdfWorkflow, pdfMdMode, enableOcrFallback, pushToast, fetchWithTimeout, mapApiErrorMessage, parseErrorPayload, clearPersistentErrorBanner, persistErrorBanner]);
+  }, [file, fileType, aiProvider, aiModel, audioTranscriptionMode, audioTranscriptionMaxMinutes, audioTranscriptionIncludeTimestamps, pdfWorkflow, pdfMdMode, enableOcrFallback, pushToast, fetchWithTimeout, mapApiErrorMessage, parseErrorPayload, clearPersistentErrorBanner, persistErrorBanner]);
 
   const handleCancelConversion = useCallback(() => {
     if (!activeConversionAbortRef.current) return;
@@ -1109,7 +1193,7 @@ export default function App() {
             </h1>
           </div>
           <p className="text-slate-500 font-medium">
-            Upload your ebook to automatically extract metadata, generate summaries, and determine classifications.
+            Upload a book or audiobook to automatically extract metadata, generate summaries, and determine classifications.
           </p>
           <button
             type="button"
@@ -1139,7 +1223,7 @@ export default function App() {
 
         <main className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
           <div className="flex flex-col lg:flex-row items-start gap-6">
-            <div className="w-full lg:w-1/3 flex-shrink-0">
+	            <div className="w-full lg:w-1/3 flex-shrink-0">
               <FileUpload 
                 file={file}
                 fileType={fileType}
@@ -1223,6 +1307,68 @@ export default function App() {
                     )}
                   </div>
                 )}
+                {fileType === 'audiobook' && (
+                  <div className="space-y-3">
+                    <div>
+                      <label htmlFor="audio-transcription-mode" className="block text-xs font-semibold mb-1 text-slate-700">
+                        Audiobook Workflow
+                      </label>
+                      <select
+                        id="audio-transcription-mode"
+                        value={audioTranscriptionMode}
+                        onChange={(event) => setAudioTranscriptionMode(event.target.value as AudioTranscriptionMode)}
+                        disabled={isLoading}
+                        className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                      >
+                        {AUDIO_TRANSCRIPTION_OPTIONS.map((option) => (
+                          <option
+                            key={option.value}
+                            value={option.value}
+                            disabled={!supportsAudioTranscription && option.value !== 'metadata-only'}
+                          >
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label htmlFor="audio-transcription-minutes" className="block text-xs font-semibold mb-1 text-slate-700">
+                        Transcription Minutes Limit ({audioTranscriptionMaxMinutes} min)
+                      </label>
+                      <input
+                        id="audio-transcription-minutes"
+                        type="range"
+                        min={1}
+                        max={audioMinuteLimit}
+                        step={1}
+                        value={audioTranscriptionMaxMinutes}
+                        onChange={(event) => setAudioTranscriptionMaxMinutes(parseInt(event.target.value, 10))}
+                        disabled={isLoading || audioTranscriptionMode === 'metadata-only' || !supportsAudioTranscription}
+                        className="w-full"
+                      />
+                      <p className="mt-1 text-[11px] text-slate-500">
+                        Controls API usage and cost. Preview caps at 20 minutes; full mode caps at 240 minutes.
+                      </p>
+                    </div>
+                    <label className="inline-flex items-center gap-2 text-xs text-slate-600">
+                      <input
+                        type="checkbox"
+                        checked={audioTranscriptionIncludeTimestamps}
+                        onChange={(event) => setAudioTranscriptionIncludeTimestamps(event.target.checked)}
+                        disabled={isLoading || audioTranscriptionMode === 'metadata-only' || !supportsAudioTranscription}
+                      />
+                      Request timestamped transcript segments
+                    </label>
+                    {!supportsAudioTranscription && (
+                      <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                        Current provider supports metadata-only for audiobook workflow. Switch to OpenAI or Google for transcription.
+                      </p>
+                    )}
+                    <p className="text-[11px] text-slate-600">
+                      Estimated transcription cost: <span className="font-semibold">${estimatedAudioCost.toFixed(2)}</span>
+                    </p>
+                  </div>
+                )}
                 <div>
                   <div className="flex items-center gap-2 mb-1">
                     <label htmlFor="ai-provider" className={`block text-xs font-semibold ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
@@ -1284,6 +1430,29 @@ export default function App() {
                 </button>
               )}
               <MetadataDisplay metadata={metadata} isDark={isDark} />
+              {audioTranscriptionTelemetry && (
+                <div className="w-full mt-4 p-4 rounded-xl border border-blue-100 bg-blue-50">
+                  <h3 className="text-sm font-bold text-blue-900 uppercase tracking-widest mb-2">Audio Processing</h3>
+                  <dl className="space-y-2 text-sm">
+                    <div className="flex justify-between gap-3">
+                      <dt className="text-blue-700 font-medium">Mode</dt>
+                      <dd className="text-blue-900">{audioTranscriptionTelemetry.mode || 'n/a'}</dd>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <dt className="text-blue-700 font-medium">Minutes Used</dt>
+                      <dd className="text-blue-900">{audioTranscriptionTelemetry.minutesUsed ?? 0}</dd>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <dt className="text-blue-700 font-medium">Transcript Length</dt>
+                      <dd className="text-blue-900">{audioTranscriptionTelemetry.transcriptCharacters ?? 0} chars</dd>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <dt className="text-blue-700 font-medium">Estimated Cost</dt>
+                      <dd className="text-blue-900">${Number(audioTranscriptionTelemetry.estimatedCostUsd || 0).toFixed(2)}</dd>
+                    </div>
+                  </dl>
+                </div>
+              )}
             </div>
             
             <div className="w-full lg:w-2/3 flex flex-col gap-6">
@@ -1291,7 +1460,9 @@ export default function App() {
                 {isLoading && (
                   <Loader
                     message={status === 'summarizing'
-                      ? `Analyzing and classifying with ${AI_PROVIDER_OPTIONS.find(option => option.value === aiProvider)?.label || 'AI'}...`
+                      ? (fileType === 'audiobook' && audioTranscriptionMode !== 'metadata-only'
+                        ? `Transcribing audio + analyzing with ${AI_PROVIDER_OPTIONS.find(option => option.value === aiProvider)?.label || 'AI'}...`
+                        : `Analyzing and classifying with ${AI_PROVIDER_OPTIONS.find(option => option.value === aiProvider)?.label || 'AI'}...`)
                       : (fileType === 'pdf' && pdfWorkflow === 'browser-text' && pdfConversionMessage)
                         ? pdfConversionMessage
                         : statusMessages[status]}

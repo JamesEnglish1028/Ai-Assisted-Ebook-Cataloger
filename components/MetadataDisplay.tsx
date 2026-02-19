@@ -15,6 +15,7 @@ interface LccClassification {
 export interface FileMetadata {
   title?: string;
   author?: string;
+  narrator?: string;
   subject?: string;
   keywords?: string;
   identifier?: {
@@ -24,6 +25,13 @@ export interface FileMetadata {
   publisher?: string;
   publicationDate?: string;
   epubVersion?: string;
+  language?: string;
+  duration?: string;
+  durationSeconds?: number;
+  audioFormat?: string;
+  audioTrackCount?: number;
+  mediaType?: string;
+  sourceFormat?: 'pdf' | 'epub' | 'audiobook';
   pageCount?: {
     value: number;
     type: 'actual' | 'estimated';
@@ -163,22 +171,29 @@ export const MetadataDisplay: React.FC<MetadataDisplayProps> = ({ metadata, isDa
     return null;
   }
 
-  const hasCoreInfo = metadata.title || metadata.author || metadata.publisher || metadata.publicationDate || metadata.identifier || metadata.pageCount || metadata.subject || metadata.keywords || metadata.epubVersion;
+  const isAudiobook = metadata.sourceFormat === 'audiobook';
+  const hasCoreInfo = metadata.title || metadata.author || metadata.narrator || metadata.publisher || metadata.publicationDate || metadata.identifier || metadata.pageCount || metadata.subject || metadata.keywords || metadata.epubVersion || metadata.language || metadata.duration || metadata.audioFormat || metadata.audioTrackCount;
   // FIX: Coerce truthy/falsy values to actual booleans to match the 'hasContent' prop type of the Section component.
   const hasClassificationInfo = !!(metadata.fieldOfStudy || metadata.discipline || (metadata.lcc && metadata.lcc.length > 0) || (metadata.bisac && metadata.bisac.length > 0) || (metadata.lcsh && metadata.lcsh.length > 0));
-  const hasReadabilityInfo = !!(metadata.readingLevel || metadata.gunningFog);
-  const hasAccessibilityInfo = !!(metadata.certification || (metadata.accessibilityFeatures && metadata.accessibilityFeatures.length > 0) || (metadata.accessModes && metadata.accessModes.length > 0) || (metadata.accessModesSufficient && metadata.accessModesSufficient.length > 0) || (metadata.hazards && metadata.hazards.length > 0));
+  const hasReadabilityInfo = !isAudiobook && !!(metadata.readingLevel || metadata.gunningFog);
+  const hasAccessibilityInfo = !isAudiobook && !!(metadata.certification || (metadata.accessibilityFeatures && metadata.accessibilityFeatures.length > 0) || (metadata.accessModes && metadata.accessModes.length > 0) || (metadata.accessModesSufficient && metadata.accessModesSufficient.length > 0) || (metadata.hazards && metadata.hazards.length > 0));
 
   return (
     <div className="w-full mt-6 p-4 rounded-xl border border-slate-200 bg-white animate-fade-in">
-      <h3 className="text-sm font-bold text-slate-700 uppercase tracking-widest mb-3">Book Details</h3>
+      <h3 className="text-sm font-bold text-slate-700 uppercase tracking-widest mb-3">Publication Details</h3>
       
       {hasCoreInfo && (
         <dl className="space-y-4">
           {metadata.title && <MetadataItem label="Title" value={metadata.title} isDark={isDark} />}
           {metadata.author && <MetadataItem label="Author" value={metadata.author} isDark={isDark} />}
+          {metadata.narrator && <MetadataItem label="Narrator" value={metadata.narrator} isDark={isDark} />}
           {metadata.publisher && <MetadataItem label="Publisher" value={metadata.publisher} isDark={isDark} />}
           {metadata.publicationDate && <MetadataItem label="Publication Date" value={metadata.publicationDate} isDark={isDark} />}
+          {metadata.language && <MetadataItem label="Language" value={metadata.language} isDark={isDark} />}
+          {metadata.duration && <MetadataItem label="Duration" value={metadata.duration} isDark={isDark} />}
+          {metadata.audioFormat && <MetadataItem label="Audio Format" value={metadata.audioFormat} isDark={isDark} />}
+          {metadata.audioTrackCount && <MetadataItem label="Audio Tracks" value={metadata.audioTrackCount} isDark={isDark} />}
+          {metadata.mediaType && <MetadataItem label="Media Type" value={metadata.mediaType} isDark={isDark} />}
           {metadata.epubVersion && <MetadataItem label="EPUB Version" value={metadata.epubVersion} isDark={isDark} />}
           
           {metadata.pageCount && (

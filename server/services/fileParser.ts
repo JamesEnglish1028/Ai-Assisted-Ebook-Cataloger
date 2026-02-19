@@ -5,10 +5,18 @@ import type { PDFParse as PDFParseType } from 'pdf-parse';
 export interface FileMetadata {
   title?: string;
   author?: string;
+  narrator?: string;
   subject?: string;
   keywords?: string;
   publisher?: string;
   publicationDate?: string;
+  language?: string;
+  duration?: string;
+  durationSeconds?: number;
+  audioFormat?: string;
+  audioTrackCount?: number;
+  mediaType?: string;
+  sourceFormat?: 'pdf' | 'epub' | 'audiobook';
   epubVersion?: string;
   pageCount?: {
     value: number;
@@ -77,6 +85,65 @@ const parsePdfDate = (dateStr: string | null | undefined): string | undefined =>
     if (!isNaN(parsedDate.getTime())) {
       return parsedDate.toLocaleDateString();
     }
+  }
+  return undefined;
+};
+
+const toDurationLabel = (seconds: number | undefined): string | undefined => {
+  if (!seconds || Number.isNaN(seconds) || seconds <= 0) return undefined;
+  const rounded = Math.round(seconds);
+  const hours = Math.floor(rounded / 3600);
+  const minutes = Math.floor((rounded % 3600) / 60);
+  const secs = rounded % 60;
+  if (hours > 0) {
+    return `${hours}h ${minutes}m ${secs}s`;
+  }
+  return `${minutes}m ${secs}s`;
+};
+
+const toStringArray = (value: unknown): string[] => {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => (typeof item === 'string' ? item.trim() : ''))
+      .filter((item) => !!item);
+  }
+  if (typeof value === 'string' && value.trim()) {
+    return [value.trim()];
+  }
+  return [];
+};
+
+const toContributorNames = (value: unknown): string[] => {
+  if (!value) return [];
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => {
+        if (typeof item === 'string') return item.trim();
+        if (item && typeof item === 'object') {
+          const record = item as Record<string, unknown>;
+          return pickLocalizedValue(record.name) || pickLocalizedValue(record);
+        }
+        return '';
+      })
+      .filter((item): item is string => !!item);
+  }
+  if (typeof value === 'string') return value.trim() ? [value.trim()] : [];
+  if (typeof value === 'object' && value !== null) {
+    const asRecord = value as Record<string, unknown>;
+    const resolved = pickLocalizedValue(asRecord.name) || pickLocalizedValue(asRecord);
+    return resolved ? [resolved] : [];
+  }
+  return [];
+};
+
+const pickLocalizedValue = (value: unknown): string | undefined => {
+  if (!value) return undefined;
+  if (typeof value === 'string') return value.trim() || undefined;
+  if (typeof value === 'object' && value !== null) {
+    const record = value as Record<string, unknown>;
+    if (typeof record.en === 'string' && record.en.trim()) return record.en.trim();
+    const firstString = Object.values(record).find((entry) => typeof entry === 'string' && (entry as string).trim());
+    if (typeof firstString === 'string') return firstString.trim();
   }
   return undefined;
 };
@@ -166,6 +233,7 @@ export async function parsePdfFile(buffer: Buffer, options: ParseOptions = {}): 
       }
 
       const metadata: FileMetadata = {
+        sourceFormat: 'pdf',
         title: (pdfInfo.Title as string) || undefined,
         author: (pdfInfo.Author as string) || undefined,
         subject: (pdfInfo.Subject as string) || undefined,
@@ -214,6 +282,145 @@ export async function parsePdfFile(buffer: Buffer, options: ParseOptions = {}): 
       clearTimeout(timeoutId);
     }
   }
+}
+
+/**
+ * Parse audiobook media (RWPM .audiobook packages and standalone audio files).
+ * Phase 1 is metadata-first and does not transcribe audio content yet.
+ */
+export async function parseAudioFile(
+  buffer: Buffer,
+  originalName: string,
+  mimeType: string,
+  options: ParseOptions = {},
+): Promise<ParseResult> {
+  const { extractCover = false, maxTextLength = 200000 } = options;
+  const AUDIO_PARSE_TIMEOUT_MS = 30000;
+  const lowerName = originalName.toLowerCase();
+
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    setTimeout(() => {
+      reject(new Error(`Audio processing timed out after ${AUDIO_PARSE_TIMEOUT_MS / 1000} seconds.`));
+    }, AUDIO_PARSE_TIMEOUT_MS);
+  });
+
+  const parsingPromise = (async (): Promise<ParseResult> => {
+    let coverImageUrl: string | null = null;
+    const metadata: FileMetadata = {
+      sourceFormat: 'audiobook',
+      mediaType: mimeType || undefined,
+      audioFormat: mimeType || undefined,
+    };
+
+    const textSegments: string[] = [];
+
+    // RWPM Audiobook package parsing
+    if (mimeType === 'application/audiobook+zip' || lowerName.endsWith('.audiobook')) {
+      const zip = await JSZip.loadAsync(buffer);
+      const manifestFile = zip.file('manifest.json');
+      if (!manifestFile) {
+        throw new Error('RWPM audiobook package is missing manifest.json.');
+      }
+
+      const manifestRaw = await manifestFile.async('string');
+      let manifest: any;
+      try {
+        manifest = JSON.parse(manifestRaw);
+      } catch {
+        throw new Error('RWPM manifest.json is not valid JSON.');
+      }
+
+      const contributors = toContributorNames(manifest?.metadata?.author || manifest?.author);
+      const narratorCandidates = toContributorNames(manifest?.metadata?.readBy || manifest?.readBy);
+      const subjects = toStringArray(manifest?.subject);
+      const keywords = toStringArray(manifest?.keywords);
+      const readingOrder = Array.isArray(manifest?.readingOrder) ? manifest.readingOrder : [];
+      const resources = Array.isArray(manifest?.resources) ? manifest.resources : [];
+      const links = Array.isArray(manifest?.links) ? manifest.links : [];
+
+      const durationSeconds = typeof manifest?.duration === 'number' ? manifest.duration : undefined;
+      const durationLabel = toDurationLabel(durationSeconds);
+
+      metadata.title = pickLocalizedValue(manifest?.metadata?.title) || pickLocalizedValue(manifest?.title) || originalName.replace(/\.[^.]+$/, '');
+      metadata.author = contributors.length > 0 ? contributors.join(', ') : pickLocalizedValue(manifest?.metadata?.author);
+      metadata.narrator = narratorCandidates.length > 0 ? narratorCandidates.join(', ') : undefined;
+      metadata.publisher = pickLocalizedValue(manifest?.metadata?.publisher) || pickLocalizedValue(manifest?.publisher);
+      metadata.language = pickLocalizedValue(manifest?.metadata?.language) || pickLocalizedValue(manifest?.language);
+      metadata.publicationDate = pickLocalizedValue(manifest?.metadata?.published) || pickLocalizedValue(manifest?.published);
+      metadata.subject = subjects.length > 0 ? subjects.join('; ') : undefined;
+      metadata.keywords = keywords.length > 0 ? keywords.join('; ') : undefined;
+      metadata.durationSeconds = durationSeconds;
+      metadata.duration = durationLabel;
+      metadata.audioTrackCount = readingOrder.length || undefined;
+      metadata.identifier = (() => {
+        const id = pickLocalizedValue(manifest?.metadata?.identifier) || pickLocalizedValue(manifest?.identifier);
+        return id ? { value: id, source: 'metadata' as const } : undefined;
+      })();
+
+      if (extractCover) {
+        const coverHref = [...links, ...resources, ...readingOrder]
+          .find((entry: any) => {
+            const rel = Array.isArray(entry?.rel) ? entry.rel : (typeof entry?.rel === 'string' ? [entry.rel] : []);
+            return rel.includes('cover') || rel.includes('http://opds-spec.org/image');
+          })?.href;
+
+        if (typeof coverHref === 'string' && coverHref.trim()) {
+          const coverFile = zip.file(coverHref.replace(/^\.\//, ''));
+          if (coverFile) {
+            const imageBuffer = await coverFile.async('nodebuffer');
+            const mediaType = coverHref.endsWith('.png') ? 'image/png' : 'image/jpeg';
+            coverImageUrl = `data:${mediaType};base64,${imageBuffer.toString('base64')}`;
+          }
+        }
+      }
+
+      const chapterLabels = readingOrder
+        .map((entry: any) => pickLocalizedValue(entry?.title))
+        .filter((entry: string | undefined): entry is string => !!entry);
+
+      textSegments.push(
+        `Audiobook title: ${metadata.title || 'Unknown title'}`,
+        metadata.author ? `Author: ${metadata.author}` : '',
+        metadata.narrator ? `Narrator: ${metadata.narrator}` : '',
+        metadata.publisher ? `Publisher: ${metadata.publisher}` : '',
+        metadata.language ? `Language: ${metadata.language}` : '',
+        metadata.duration ? `Duration: ${metadata.duration}` : '',
+        metadata.subject ? `Subjects: ${metadata.subject}` : '',
+        metadata.keywords ? `Keywords: ${metadata.keywords}` : '',
+        chapterLabels.length ? `Chapters/Tracks: ${chapterLabels.join('; ')}` : '',
+      );
+    } else {
+      // Standalone audio metadata fallback (without transcription in Phase 1)
+      metadata.title = originalName.replace(/\.[^.]+$/, '');
+      metadata.audioFormat = mimeType || (lowerName.endsWith('.m4b') ? 'audio/mp4' : undefined);
+      metadata.mediaType = mimeType || undefined;
+      metadata.audioTrackCount = 1;
+
+      textSegments.push(
+        `Audiobook file title: ${metadata.title}`,
+        `Detected audio format: ${metadata.audioFormat || 'unknown'}`,
+        `Original filename: ${originalName}`,
+      );
+    }
+
+    let analysisText = textSegments.filter(Boolean).join('\n');
+    if (!analysisText.trim()) {
+      analysisText = `Audiobook file: ${originalName}`;
+    }
+    if (analysisText.length > maxTextLength) {
+      analysisText = analysisText.substring(0, maxTextLength);
+    }
+
+    return {
+      text: analysisText,
+      coverImageUrl,
+      metadata,
+      toc: null,
+      pageList: null,
+    };
+  })();
+
+  return Promise.race([parsingPromise, timeoutPromise]);
 }
 
 /**
@@ -545,6 +752,7 @@ export async function parseEpubFile(buffer: Buffer, options: ParseOptions = {}):
       }
       
       const metadata: FileMetadata = {
+        sourceFormat: 'epub',
         title: getDcElement('title'),
         author: getDcElement('creator'),
         subject: getDcElement('subject'),

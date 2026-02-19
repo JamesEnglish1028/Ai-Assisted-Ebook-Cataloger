@@ -2,7 +2,7 @@
 
 # AI Assisted Ebook Cataloger
 
-An intelligent ebook analysis tool that extracts metadata, generates AI-powered summaries, and provides library classifications (LCC, BISAC, LCSH) for PDF and EPUB files.
+An intelligent publication analysis tool that extracts metadata, generates AI-powered summaries, and provides library classifications (LCC, BISAC, LCSH) for PDF, EPUB, and audiobook files.
 
 ## Features
 
@@ -25,6 +25,14 @@ An intelligent ebook analysis tool that extracts metadata, generates AI-powered 
 🎯 **Support for Multiple Formats:**
 - PDF files (non-encrypted)
 - EPUB 2.0 and 3.0 (DRM-free)
+- Audiobook Phase 1:
+  - RWPM `.audiobook` package metadata extraction (manifest-based)
+  - Standalone `.mp3`, `.m4b`, and `.wav` ingest with metadata-first fallback analysis
+  - Note: Phase 1 does not transcribe audio; AI analysis is generated from extracted metadata context
+- Audiobook Phase 2:
+  - Provider-aware workflow modes: `metadata-only`, `transcribe-preview`, `transcribe-full`
+  - Cost controls via transcription minute caps (preview/full limits)
+  - UI telemetry panel with transcription minutes, transcript length, and estimated cost
 
 🛡️ **Production-Ready API:**
 - Rate limiting (10 analysis requests per 15 minutes per IP)

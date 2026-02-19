@@ -12,14 +12,35 @@ const upload = multer({
     fileSize: 100 * 1024 * 1024, // 100MB limit (increased for large textbooks)
   },
   fileFilter: (req, file, cb) => {
-    const allowedMimeTypes = ['application/pdf', 'application/epub+zip'];
+    const allowedMimeTypes = [
+      'application/pdf',
+      'application/epub+zip',
+      'audio/mpeg',
+      'audio/mp4',
+      'audio/x-m4a',
+      'audio/wav',
+      'audio/x-wav',
+      'application/audiobook+zip',
+    ];
+    const lowerName = file.originalname.toLowerCase();
     const isPdf = file.mimetype === 'application/pdf';
-    const isEpub = file.mimetype === 'application/epub+zip' || file.originalname.toLowerCase().endsWith('.epub');
+    const isEpub = file.mimetype === 'application/epub+zip' || lowerName.endsWith('.epub');
+    const isAudiobook =
+      file.mimetype === 'audio/mpeg' ||
+      file.mimetype === 'audio/mp4' ||
+      file.mimetype === 'audio/x-m4a' ||
+      file.mimetype === 'audio/wav' ||
+      file.mimetype === 'audio/x-wav' ||
+      file.mimetype === 'application/audiobook+zip' ||
+      lowerName.endsWith('.mp3') ||
+      lowerName.endsWith('.m4b') ||
+      lowerName.endsWith('.wav') ||
+      lowerName.endsWith('.audiobook');
     
-    if (isPdf || isEpub) {
+    if (isPdf || isEpub || isAudiobook) {
       cb(null, true);
     } else {
-      const error = new Error(`Invalid file type: ${file.mimetype}. Only PDF and EPUB files are allowed.`);
+      const error = new Error(`Invalid file type: ${file.mimetype}. Only PDF, EPUB, MP3, M4B, WAV, and .audiobook files are allowed.`);
       error.name = 'ValidationError';
       cb(error);
     }
@@ -46,6 +67,18 @@ const validateAnalyzeBookQuery = [
     .isString()
     .isLength({ min: 1, max: 100 })
     .withMessage('aiModel must be a non-empty string up to 100 characters'),
+  body('transcriptionMode')
+    .optional()
+    .isIn(['metadata-only', 'transcribe-preview', 'transcribe-full'])
+    .withMessage('transcriptionMode must be one of: metadata-only, transcribe-preview, transcribe-full'),
+  body('transcriptionMaxMinutes')
+    .optional()
+    .isInt({ min: 1, max: 240 })
+    .withMessage('transcriptionMaxMinutes must be between 1 and 240'),
+  body('transcriptionIncludeTimestamps')
+    .optional()
+    .isBoolean()
+    .withMessage('transcriptionIncludeTimestamps must be true/false'),
 ];
 
 const validateAnalyzeTextBody = [
@@ -130,7 +163,7 @@ const handleValidationErrors = (req: express.Request, res: express.Response, nex
 /**
  * POST /api/analyze-book
  * 
- * Analyzes an uploaded ebook file (PDF or EPUB) and returns:
+ * Analyzes an uploaded book file (PDF, EPUB, or audiobook) and returns:
  * - Metadata (title, author, ISBN, etc.)
  * - AI-generated summary
  * - Classifications (LCC, BISAC, LCSH)

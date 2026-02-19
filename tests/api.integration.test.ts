@@ -36,7 +36,7 @@ describe('Book Analysis API Integration Tests', () => {
       expect(response.body).toEqual({
         error: 'No file uploaded',
         code: 'FILE_REQUIRED',
-        message: 'Please upload a PDF or EPUB file'
+        message: 'Please upload a PDF, EPUB, or audiobook file'
       });
     });
 
@@ -151,6 +151,44 @@ describe('Book Analysis API Integration Tests', () => {
 
       // Note: Testing actual large files would be impractical in unit tests
       // This would be better tested in e2e tests with real file fixtures
+    });
+
+    describe('Audiobook transcription workflow', () => {
+      it('should reject invalid transcription mode values', async () => {
+        const response = await request(app)
+          .post('/api/analyze-book')
+          .field('aiProvider', 'openai')
+          .field('transcriptionMode', 'invalid-mode')
+          .attach('file', Buffer.from('fake audio bytes'), {
+            filename: 'sample.mp3',
+            contentType: 'audio/mpeg',
+          })
+          .expect(400);
+
+        expect(response.body.error).toBe('Validation failed');
+        expect(response.body.details).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              field: 'transcriptionMode',
+            }),
+          ])
+        );
+      });
+
+      it('should reject transcription mode for unsupported provider', async () => {
+        const response = await request(app)
+          .post('/api/analyze-book')
+          .field('aiProvider', 'anthropic')
+          .field('transcriptionMode', 'transcribe-preview')
+          .field('transcriptionMaxMinutes', '5')
+          .attach('file', Buffer.from('fake audio bytes'), {
+            filename: 'sample.mp3',
+            contentType: 'audio/mpeg',
+          })
+          .expect(400);
+
+        expect(response.body.code).toBe('TRANSCRIPTION_MODE_UNSUPPORTED');
+      });
     });
   });
 

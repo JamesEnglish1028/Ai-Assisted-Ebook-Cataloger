@@ -1,7 +1,12 @@
 import { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
-import { parsePdfFile, parseEpubFile } from '../services/fileParser';
+import { parsePdfFile, parseEpubFile, parseAudioFile } from '../services/fileParser';
 import { generateBookAnalysisWithProvider, resolveAISelection } from '../services/aiProviderService';
+import {
+  AudioTranscriptionMode,
+  getAudioModeSupport,
+  transcribeAudioWithProvider,
+} from '../services/audioTranscriptionService';
 import { calculateFleschKincaid, calculateGunningFog } from '../services/textAnalysis';
 
 // Simple in-memory cache (in production, use Redis or similar)
@@ -31,7 +36,7 @@ export async function analyzeBook(req: Request, res: Response, next: NextFunctio
       return res.status(400).json({ 
         error: 'No file uploaded',
         code: 'FILE_REQUIRED',
-        message: 'Please upload a PDF or EPUB file'
+        message: 'Please upload a PDF, EPUB, or audiobook file'
       });
     }
 
@@ -62,14 +67,25 @@ export async function analyzeBook(req: Request, res: Response, next: NextFunctio
 
     const isPdf = file.mimetype === 'application/pdf';
     const isEpub = file.mimetype === 'application/epub+zip' || file.originalname.toLowerCase().endsWith('.epub');
+    const isAudiobook =
+      file.mimetype === 'audio/mpeg' ||
+      file.mimetype === 'audio/mp4' ||
+      file.mimetype === 'audio/x-m4a' ||
+      file.mimetype === 'audio/wav' ||
+      file.mimetype === 'audio/x-wav' ||
+      file.mimetype === 'application/audiobook+zip' ||
+      file.originalname.toLowerCase().endsWith('.mp3') ||
+      file.originalname.toLowerCase().endsWith('.m4b') ||
+      file.originalname.toLowerCase().endsWith('.wav') ||
+      file.originalname.toLowerCase().endsWith('.audiobook');
 
-    if (!isPdf && !isEpub) {
+    if (!isPdf && !isEpub && !isAudiobook) {
       console.log('❌ Invalid file type');
       return res.status(400).json({ 
         error: `Invalid file type: ${file.mimetype}`,
         code: 'INVALID_FILE_TYPE',
-        message: 'Only PDF and EPUB files are supported',
-        supportedTypes: ['application/pdf', 'application/epub+zip']
+        message: 'Only PDF, EPUB, MP3, M4B, WAV, and .audiobook files are supported',
+        supportedTypes: ['application/pdf', 'application/epub+zip', 'audio/mpeg', 'audio/mp4', 'audio/wav', 'application/audiobook+zip']
       });
     }
 
@@ -77,6 +93,18 @@ export async function analyzeBook(req: Request, res: Response, next: NextFunctio
       typeof req.body?.aiProvider === 'string' ? req.body.aiProvider : undefined,
       typeof req.body?.aiModel === 'string' ? req.body.aiModel : undefined
     );
+    const requestedTranscriptionMode = typeof req.body?.transcriptionMode === 'string'
+      ? req.body.transcriptionMode
+      : 'metadata-only';
+    const transcriptionMode: AudioTranscriptionMode = requestedTranscriptionMode === 'transcribe-preview' || requestedTranscriptionMode === 'transcribe-full'
+      ? requestedTranscriptionMode
+      : 'metadata-only';
+    const requestedTranscriptionMinutes = typeof req.body?.transcriptionMaxMinutes === 'string'
+      ? parseInt(req.body.transcriptionMaxMinutes, 10)
+      : typeof req.body?.transcriptionMaxMinutes === 'number'
+        ? req.body.transcriptionMaxMinutes
+        : 10;
+    const transcriptionIncludeTimestamps = req.body?.transcriptionIncludeTimestamps === 'true' || req.body?.transcriptionIncludeTimestamps === true;
 
     // Generate cache key from file hash and options
     const fileHash = crypto.createHash('md5').update(file.buffer).digest('hex');
@@ -95,24 +123,27 @@ export async function analyzeBook(req: Request, res: Response, next: NextFunctio
       });
     }
 
-    console.log(`📖 Processing ${isPdf ? 'PDF' : 'EPUB'}: ${file.originalname}`);
+    console.log(`📖 Processing ${isPdf ? 'PDF' : isEpub ? 'EPUB' : 'AUDIOBOOK'}: ${file.originalname}`);
 
     const parseOptions = { extractCover, maxTextLength };
     console.log('⚙️ Parse options:', parseOptions);
 
     // Parse the file
     let parseResult;
+    let transcriptionInfo: any = null;
     try {
-      parseResult = isPdf 
+      parseResult = isPdf
         ? await parsePdfFile(file.buffer, parseOptions)
-        : await parseEpubFile(file.buffer, parseOptions);
+        : isEpub
+          ? await parseEpubFile(file.buffer, parseOptions)
+          : await parseAudioFile(file.buffer, file.originalname, file.mimetype, parseOptions);
     } catch (parseError: any) {
       console.error('❌ File parsing failed:', parseError.message);
       return res.status(422).json({
         error: 'Failed to parse file',
         code: 'PARSE_ERROR',
         message: parseError.message,
-        fileType: isPdf ? 'pdf' : 'epub'
+        fileType: isPdf ? 'pdf' : isEpub ? 'epub' : 'audiobook'
       });
     }
 
@@ -126,16 +157,61 @@ export async function analyzeBook(req: Request, res: Response, next: NextFunctio
 
     console.log(`✅ Extracted ${parseResult.text.length} characters from ${file.originalname}`);
 
+    let analysisText = parseResult.text;
+    if (isAudiobook && transcriptionMode !== 'metadata-only') {
+      const support = getAudioModeSupport(aiSelection.provider);
+      if (!support.supportsTranscription) {
+        return res.status(400).json({
+          error: 'Transcription mode not supported',
+          code: 'TRANSCRIPTION_MODE_UNSUPPORTED',
+          message: support.reason,
+        });
+      }
+
+      try {
+        const transcriptionResult = await transcribeAudioWithProvider(
+          file.buffer,
+          file.mimetype,
+          file.originalname,
+          aiSelection,
+          {
+            mode: transcriptionMode,
+            maxMinutes: Number.isFinite(requestedTranscriptionMinutes) ? requestedTranscriptionMinutes : 10,
+            includeTimestamps: transcriptionIncludeTimestamps,
+          }
+        );
+        if (transcriptionResult.transcript.trim()) {
+          analysisText = `${parseResult.text}\n\n---\nAudiobook transcript excerpt:\n${transcriptionResult.transcript}`.trim();
+        }
+        transcriptionInfo = {
+          mode: transcriptionMode,
+          provider: transcriptionResult.providerUsed,
+          model: transcriptionResult.modelUsed,
+          minutesUsed: transcriptionResult.minutesUsed,
+          estimatedCostUsd: transcriptionResult.estimatedCostUsd,
+          truncated: transcriptionResult.truncated,
+          transcriptCharacters: transcriptionResult.transcript.length,
+          includeTimestamps: transcriptionIncludeTimestamps,
+        };
+      } catch (transcriptionError: any) {
+        return res.status(422).json({
+          error: 'Failed to transcribe audiobook',
+          code: 'AUDIO_TRANSCRIPTION_ERROR',
+          message: transcriptionError?.message || 'Unable to transcribe uploaded audio with selected provider.',
+        });
+      }
+    }
+
     // Calculate reading level metrics
-    const fleschKincaid = calculateFleschKincaid(parseResult.text);
-    const gunningFog = calculateGunningFog(parseResult.text);
+    const fleschKincaid = isAudiobook ? null : calculateFleschKincaid(analysisText);
+    const gunningFog = isAudiobook ? null : calculateGunningFog(analysisText);
 
     console.log(`🤖 Analyzing with ${aiSelection.provider} (${aiSelection.model})...`);
 
     // Generate AI analysis with error handling
     let analysis;
     try {
-      analysis = await generateBookAnalysisWithProvider(parseResult.text, aiSelection);
+      analysis = await generateBookAnalysisWithProvider(analysisText, aiSelection);
     } catch (aiError: any) {
       console.error('❌ AI analysis failed:', aiError.message);
       return res.status(503).json({
@@ -156,15 +232,16 @@ export async function analyzeBook(req: Request, res: Response, next: NextFunctio
         lcsh: analysis.lcsh,
         fieldOfStudy: analysis.fieldOfStudy,
         discipline: analysis.discipline,
-        readingLevel: fleschKincaid ?? undefined,
-        gunningFog: gunningFog ?? undefined,
+        readingLevel: isAudiobook ? undefined : fleschKincaid ?? undefined,
+        gunningFog: isAudiobook ? undefined : gunningFog ?? undefined,
       },
       summary: analysis.summary,
       tableOfContents: parseResult.toc ?? null,
       pageList: parseResult.pageList ?? null,
       coverImage: parseResult.coverImageUrl ?? null,
       fileName: file.originalname,
-      fileType: isPdf ? 'pdf' : 'epub',
+      fileType: isPdf ? 'pdf' : isEpub ? 'epub' : 'audiobook',
+      transcription: transcriptionInfo,
       aiProvider: aiSelection.provider,
       aiModel: aiSelection.model,
       processedAt: new Date().toISOString(),
@@ -278,8 +355,9 @@ export async function analyzeExtractedText(req: Request, res: Response, next: Ne
       });
     }
 
-    const fleschKincaid = calculateFleschKincaid(text);
-    const gunningFog = calculateGunningFog(text);
+    const isAudiobook = fileType === 'audiobook';
+    const fleschKincaid = isAudiobook ? null : calculateFleschKincaid(text);
+    const gunningFog = isAudiobook ? null : calculateGunningFog(text);
 
     console.log(`🤖 Analyzing extracted text with ${aiSelection.provider} (${aiSelection.model})...`);
 
@@ -303,8 +381,8 @@ export async function analyzeExtractedText(req: Request, res: Response, next: Ne
         lcsh: analysis.lcsh,
         fieldOfStudy: analysis.fieldOfStudy,
         discipline: analysis.discipline,
-        readingLevel: fleschKincaid ?? undefined,
-        gunningFog: gunningFog ?? undefined,
+        readingLevel: isAudiobook ? undefined : fleschKincaid ?? undefined,
+        gunningFog: isAudiobook ? undefined : gunningFog ?? undefined,
       },
       summary: analysis.summary,
       tableOfContents: null,
