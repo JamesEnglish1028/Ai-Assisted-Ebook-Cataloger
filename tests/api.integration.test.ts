@@ -154,6 +154,31 @@ describe('Book Analysis API Integration Tests', () => {
     });
 
     describe('Audiobook transcription workflow', () => {
+      it('should accept Palace-style audiobook manifest JSON with spine', async () => {
+        const manifest = {
+          metadata: {
+            title: 'Sample Palace Audiobook',
+            author: 'Sample Author',
+          },
+          spine: [
+            { href: 'track1.mp4', type: 'audio/mp4', title: 'Track 1', duration: 120 },
+            { href: 'track2.mp4', type: 'audio/mp4', title: 'Track 2', duration: 95 },
+          ],
+        };
+
+        const response = await request(app)
+          .post('/api/analyze-book')
+          .field('aiProvider', 'google')
+          .field('transcriptionMode', 'metadata-only')
+          .attach('file', Buffer.from(JSON.stringify(manifest), 'utf8'), {
+            filename: 'manifest.json',
+            contentType: 'application/json',
+          });
+
+        // Should pass manifest parsing/validation (may still fail later if AI keys are unavailable).
+        expect(response.status).not.toBe(422);
+      });
+
       it('should reject invalid transcription mode values', async () => {
         const response = await request(app)
           .post('/api/analyze-book')

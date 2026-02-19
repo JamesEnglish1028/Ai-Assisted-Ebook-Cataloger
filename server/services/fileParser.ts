@@ -313,32 +313,28 @@ export async function parseAudioFile(
     };
 
     const textSegments: string[] = [];
+    const getAudiobookItems = (manifest: any): any[] => {
+      if (Array.isArray(manifest?.readingOrder)) return manifest.readingOrder;
+      if (Array.isArray(manifest?.spine)) return manifest.spine;
+      return [];
+    };
 
-    // RWPM Audiobook package parsing
-    if (mimeType === 'application/audiobook+zip' || lowerName.endsWith('.audiobook')) {
-      const zip = await JSZip.loadAsync(buffer);
-      const manifestFile = zip.file('manifest.json');
-      if (!manifestFile) {
-        throw new Error('RWPM audiobook package is missing manifest.json.');
-      }
+    const getManifestDurationSeconds = (manifest: any, items: any[]): number | undefined => {
+      if (typeof manifest?.duration === 'number' && manifest.duration > 0) return manifest.duration;
+      const summed = items.reduce((total, entry) => {
+        const value = typeof entry?.duration === 'number' ? entry.duration : 0;
+        return total + (value > 0 ? value : 0);
+      }, 0);
+      return summed > 0 ? summed : undefined;
+    };
 
-      const manifestRaw = await manifestFile.async('string');
-      let manifest: any;
-      try {
-        manifest = JSON.parse(manifestRaw);
-      } catch {
-        throw new Error('RWPM manifest.json is not valid JSON.');
-      }
-
+    const applyRwpmManifest = (manifest: any): void => {
       const contributors = toContributorNames(manifest?.metadata?.author || manifest?.author);
       const narratorCandidates = toContributorNames(manifest?.metadata?.readBy || manifest?.readBy);
       const subjects = toStringArray(manifest?.subject);
       const keywords = toStringArray(manifest?.keywords);
-      const readingOrder = Array.isArray(manifest?.readingOrder) ? manifest.readingOrder : [];
-      const resources = Array.isArray(manifest?.resources) ? manifest.resources : [];
-      const links = Array.isArray(manifest?.links) ? manifest.links : [];
-
-      const durationSeconds = typeof manifest?.duration === 'number' ? manifest.duration : undefined;
+      const readingOrder = getAudiobookItems(manifest);
+      const durationSeconds = getManifestDurationSeconds(manifest, readingOrder);
       const durationLabel = toDurationLabel(durationSeconds);
 
       metadata.title = pickLocalizedValue(manifest?.metadata?.title) || pickLocalizedValue(manifest?.title) || originalName.replace(/\.[^.]+$/, '');
@@ -357,6 +353,43 @@ export async function parseAudioFile(
         return id ? { value: id, source: 'metadata' as const } : undefined;
       })();
 
+      const chapterLabels = readingOrder
+        .map((entry: any) => pickLocalizedValue(entry?.title) || pickLocalizedValue(entry?.name))
+        .filter((entry: string | undefined): entry is string => !!entry);
+
+      textSegments.push(
+        `Audiobook title: ${metadata.title || 'Unknown title'}`,
+        metadata.author ? `Author: ${metadata.author}` : '',
+        metadata.narrator ? `Narrator: ${metadata.narrator}` : '',
+        metadata.publisher ? `Publisher: ${metadata.publisher}` : '',
+        metadata.language ? `Language: ${metadata.language}` : '',
+        metadata.duration ? `Duration: ${metadata.duration}` : '',
+        metadata.subject ? `Subjects: ${metadata.subject}` : '',
+        metadata.keywords ? `Keywords: ${metadata.keywords}` : '',
+        chapterLabels.length ? `Chapters/Tracks: ${chapterLabels.join('; ')}` : '',
+      );
+    };
+
+    // RWPM Audiobook package parsing
+    if (mimeType === 'application/audiobook+zip' || lowerName.endsWith('.audiobook')) {
+      const zip = await JSZip.loadAsync(buffer);
+      const manifestFile = zip.file('manifest.json');
+      if (!manifestFile) {
+        throw new Error('RWPM audiobook package is missing manifest.json.');
+      }
+
+      const manifestRaw = await manifestFile.async('string');
+      let manifest: any;
+      try {
+        manifest = JSON.parse(manifestRaw);
+      } catch {
+        throw new Error('RWPM manifest.json is not valid JSON.');
+      }
+      applyRwpmManifest(manifest);
+      const readingOrder = getAudiobookItems(manifest);
+      const resources = Array.isArray(manifest?.resources) ? manifest.resources : [];
+      const links = Array.isArray(manifest?.links) ? manifest.links : [];
+
       if (extractCover) {
         const coverHref = [...links, ...resources, ...readingOrder]
           .find((entry: any) => {
@@ -373,22 +406,23 @@ export async function parseAudioFile(
           }
         }
       }
+    } else if (
+      mimeType === 'application/json' ||
+      mimeType === 'text/json' ||
+      lowerName.endsWith('.json')
+    ) {
+      let manifest: any;
+      try {
+        manifest = JSON.parse(buffer.toString('utf8'));
+      } catch {
+        throw new Error('RWPM manifest JSON is not valid.');
+      }
 
-      const chapterLabels = readingOrder
-        .map((entry: any) => pickLocalizedValue(entry?.title))
-        .filter((entry: string | undefined): entry is string => !!entry);
-
-      textSegments.push(
-        `Audiobook title: ${metadata.title || 'Unknown title'}`,
-        metadata.author ? `Author: ${metadata.author}` : '',
-        metadata.narrator ? `Narrator: ${metadata.narrator}` : '',
-        metadata.publisher ? `Publisher: ${metadata.publisher}` : '',
-        metadata.language ? `Language: ${metadata.language}` : '',
-        metadata.duration ? `Duration: ${metadata.duration}` : '',
-        metadata.subject ? `Subjects: ${metadata.subject}` : '',
-        metadata.keywords ? `Keywords: ${metadata.keywords}` : '',
-        chapterLabels.length ? `Chapters/Tracks: ${chapterLabels.join('; ')}` : '',
-      );
+      const audiobookItems = getAudiobookItems(manifest);
+      if (!manifest || typeof manifest !== 'object' || audiobookItems.length === 0) {
+        throw new Error('The uploaded JSON does not appear to be a valid audiobook manifest (missing readingOrder/spine).');
+      }
+      applyRwpmManifest(manifest);
     } else {
       // Standalone audio metadata fallback (without transcription in Phase 1)
       metadata.title = originalName.replace(/\.[^.]+$/, '');

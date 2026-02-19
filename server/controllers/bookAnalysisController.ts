@@ -74,18 +74,25 @@ export async function analyzeBook(req: Request, res: Response, next: NextFunctio
       file.mimetype === 'audio/wav' ||
       file.mimetype === 'audio/x-wav' ||
       file.mimetype === 'application/audiobook+zip' ||
+      file.mimetype === 'application/json' ||
+      file.mimetype === 'text/json' ||
       file.originalname.toLowerCase().endsWith('.mp3') ||
       file.originalname.toLowerCase().endsWith('.m4b') ||
       file.originalname.toLowerCase().endsWith('.wav') ||
-      file.originalname.toLowerCase().endsWith('.audiobook');
+      file.originalname.toLowerCase().endsWith('.audiobook') ||
+      file.originalname.toLowerCase().endsWith('.json');
+    const isAudiobookManifestJson =
+      file.mimetype === 'application/json' ||
+      file.mimetype === 'text/json' ||
+      file.originalname.toLowerCase().endsWith('.json');
 
     if (!isPdf && !isEpub && !isAudiobook) {
       console.log('❌ Invalid file type');
       return res.status(400).json({ 
         error: `Invalid file type: ${file.mimetype}`,
         code: 'INVALID_FILE_TYPE',
-        message: 'Only PDF, EPUB, MP3, M4B, WAV, and .audiobook files are supported',
-        supportedTypes: ['application/pdf', 'application/epub+zip', 'audio/mpeg', 'audio/mp4', 'audio/wav', 'application/audiobook+zip']
+        message: 'Only PDF, EPUB, MP3, M4B, WAV, .audiobook, and RWPM .json files are supported',
+        supportedTypes: ['application/pdf', 'application/epub+zip', 'audio/mpeg', 'audio/mp4', 'audio/wav', 'application/audiobook+zip', 'application/json']
       });
     }
 
@@ -159,6 +166,13 @@ export async function analyzeBook(req: Request, res: Response, next: NextFunctio
 
     let analysisText = parseResult.text;
     if (isAudiobook && transcriptionMode !== 'metadata-only') {
+      if (isAudiobookManifestJson) {
+        return res.status(400).json({
+          error: 'Transcription mode not supported for manifest-only uploads',
+          code: 'TRANSCRIPTION_MODE_UNSUPPORTED',
+          message: 'Manifest JSON uploads do not contain audio bytes. Use metadata-only, or upload audio/.audiobook for transcription.',
+        });
+      }
       const support = getAudioModeSupport(aiSelection.provider);
       if (!support.supportsTranscription) {
         return res.status(400).json({

@@ -103,12 +103,12 @@ export const FileUpload: React.FC<FileUploadProps> = ({ file, fileType, onFileCh
     ? 'application/pdf'
     : fileType === 'epub'
       ? 'application/epub+zip'
-      : 'audio/mpeg,audio/mp4,audio/x-m4a,audio/wav,audio/x-wav,application/audiobook+zip';
+      : 'audio/mpeg,audio/mp4,audio/x-m4a,audio/wav,audio/x-wav,application/audiobook+zip,application/json,text/json';
   const acceptedExtension = fileType === 'pdf'
     ? '.pdf'
     : fileType === 'epub'
       ? '.epub'
-      : '.mp3,.m4b,.wav,.audiobook';
+      : '.mp3,.m4b,.wav,.audiobook,.json';
 
   const renderContent = () => {
     if (showSuccess) {
@@ -130,7 +130,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ file, fileType, onFileCh
       <>
         <svg className="w-10 h-10 mb-3 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-4-4V6a4 4 0 014-4h1.586a1 1 0 01.707.293l1.414 1.414a1 1 0 00.707.293H13.5a4 4 0 014 4v1.586a1 1 0 01-.293.707l-1.414 1.414a1 1 0 00-.293.707V16m-7-5l3-3m0 0l3 3m-3-3v12"></path></svg>
         <p className={`mb-2 text-sm ${isDark ? 'text-slate-400' : 'text-slate-600'}`}><span className="font-semibold">Click to upload</span> or drag and drop</p>
-        <p className="text-xs text-slate-500">{fileType === 'audiobook' ? 'AUDIO only' : `${fileType.toUpperCase()} only`}</p>
+        <p className="text-xs text-slate-500">{fileType === 'audiobook' ? 'Audio or RWPM manifest (.json)' : `${fileType.toUpperCase()} only`}</p>
       </>
     );
   };

@@ -21,6 +21,8 @@ const upload = multer({
       'audio/wav',
       'audio/x-wav',
       'application/audiobook+zip',
+      'application/json',
+      'text/json',
     ];
     const lowerName = file.originalname.toLowerCase();
     const isPdf = file.mimetype === 'application/pdf';
@@ -32,15 +34,18 @@ const upload = multer({
       file.mimetype === 'audio/wav' ||
       file.mimetype === 'audio/x-wav' ||
       file.mimetype === 'application/audiobook+zip' ||
+      file.mimetype === 'application/json' ||
+      file.mimetype === 'text/json' ||
       lowerName.endsWith('.mp3') ||
       lowerName.endsWith('.m4b') ||
       lowerName.endsWith('.wav') ||
-      lowerName.endsWith('.audiobook');
+      lowerName.endsWith('.audiobook') ||
+      lowerName.endsWith('.json');
     
     if (isPdf || isEpub || isAudiobook) {
       cb(null, true);
     } else {
-      const error = new Error(`Invalid file type: ${file.mimetype}. Only PDF, EPUB, MP3, M4B, WAV, and .audiobook files are allowed.`);
+      const error = new Error(`Invalid file type: ${file.mimetype}. Only PDF, EPUB, MP3, M4B, WAV, .audiobook, and RWPM .json files are allowed.`);
       error.name = 'ValidationError';
       cb(error);
     }

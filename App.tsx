@@ -353,10 +353,13 @@ export default function App() {
           selectedFile.type === 'audio/wav' ||
           selectedFile.type === 'audio/x-wav' ||
           selectedFile.type === 'application/audiobook+zip' ||
+          selectedFile.type === 'application/json' ||
+          selectedFile.type === 'text/json' ||
           lowerName.endsWith('.mp3') ||
           lowerName.endsWith('.m4b') ||
           lowerName.endsWith('.wav') ||
-          lowerName.endsWith('.audiobook')
+          lowerName.endsWith('.audiobook') ||
+          lowerName.endsWith('.json')
         ) && fileType === 'audiobook';
 
         if (isPdf || isEpub || isAudiobook) {
