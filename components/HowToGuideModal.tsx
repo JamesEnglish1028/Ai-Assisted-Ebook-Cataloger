@@ -69,11 +69,40 @@ export const HowToGuideModal: React.FC<HowToGuideModalProps> = ({ isOpen, onClos
             </p>
           </GuideSection>
 
+          <GuideSection icon="fa-database" title="Where Catalog Data Comes From">
+            <p>
+              `Extracted metadata`: title, author, publisher, identifiers, and accessibility fields read from the uploaded file.
+              `AI analysis`: summary, LCC/LCSH/BISAC classification, field of study, and discipline inferred from book content.
+            </p>
+            <p>
+              `Authority enrichment (optional)`: Library of Congress authority candidates can be used to ground subject/name choices.
+              `Open Library enrichment (optional)`: bibliographic metadata can be looked up by identifier or title for additional context.
+            </p>
+          </GuideSection>
+
           <GuideSection icon="fa-play" title="Quick Start">
             <p>1. Select `PDF` or `EPUB` in the upload panel.</p>
             <p>2. Upload a valid ebook file (drag/drop or click).</p>
             <p>3. Click `Generate Analysis`.</p>
             <p>4. Review results in the summary and metadata sections.</p>
+          </GuideSection>
+
+          <GuideSection icon="fa-microscope" title="Source Transparency in Results">
+            <p>
+              In `Book Details`, look for enrichment fields such as `locAuthority`, `openLibrary`, and related candidate data.
+              These indicate whether authority/bibliographic sources were used and how confident the match was.
+            </p>
+            <p>
+              `authorityAlignment` indicates which authority-backed headings or names the model actually used in its final classification output.
+            </p>
+          </GuideSection>
+
+          <GuideSection icon="fa-sliders" title="Open Library Enrichment Modes">
+            <p>
+              `shadow` mode: fetches Open Library data and shows provenance without changing extracted metadata fields.
+              `apply` mode: fills missing bibliographic fields (such as title, author, publisher, publication date, page count, or identifier)
+              when high-confidence Open Library data is available.
+            </p>
           </GuideSection>
 
           <GuideSection icon="fa-chart-simple" title="Understanding Results">

@@ -12,6 +12,11 @@ import {
   buildLocAuthorityContext,
   getLocAuthorityFeatureCacheKey,
 } from '../services/locAuthorityService';
+import {
+  buildOpenLibraryContext,
+  getOpenLibraryFeatureCacheKey,
+  mergeOpenLibraryMetadata,
+} from '../services/openLibraryService';
 
 // Simple in-memory cache (in production, use Redis or similar)
 const analysisCache = new Map<string, any>();
@@ -122,7 +127,8 @@ export async function analyzeBook(req: Request, res: Response, next: NextFunctio
     const extractCover = req.query.extractCover === 'true';
     const maxTextLength = parseRequestedMaxTextLength(req);
     const locAuthorityFeatureKey = getLocAuthorityFeatureCacheKey();
-    const cacheKey = `${fileHash}_${extractCover}_${maxTextLength}_${aiSelection.provider}_${aiSelection.model}_${locAuthorityFeatureKey}`;
+    const openLibraryFeatureKey = getOpenLibraryFeatureCacheKey();
+    const cacheKey = `${fileHash}_${extractCover}_${maxTextLength}_${aiSelection.provider}_${aiSelection.model}_${locAuthorityFeatureKey}_${openLibraryFeatureKey}`;
     
     // Check cache first
     const cached = analysisCache.get(cacheKey);
@@ -228,6 +234,11 @@ export async function analyzeBook(req: Request, res: Response, next: NextFunctio
       subject: parseResult.metadata.subject,
       keywords: parseResult.metadata.keywords,
     });
+    const openLibraryContext = await buildOpenLibraryContext({
+      title: parseResult.metadata.title,
+      author: parseResult.metadata.author,
+      identifier: parseResult.metadata.identifier?.value,
+    });
 
     // Calculate reading level metrics
     const fleschKincaid = isAudiobook ? null : calculateFleschKincaid(analysisText);
@@ -240,6 +251,7 @@ export async function analyzeBook(req: Request, res: Response, next: NextFunctio
     try {
       analysis = await generateBookAnalysisWithProvider(analysisText, aiSelection, {
         locAuthorityContext,
+        openLibraryContext,
       });
     } catch (aiError: any) {
       console.error('❌ AI analysis failed:', aiError.message);
@@ -253,27 +265,43 @@ export async function analyzeBook(req: Request, res: Response, next: NextFunctio
     console.log('✨ Analysis complete!');
 
     // Combine all results
+    const baseMetadata = {
+      ...parseResult.metadata,
+      lcc: analysis.lcc,
+      bisac: analysis.bisac,
+      lcsh: analysis.lcsh,
+      fieldOfStudy: analysis.fieldOfStudy,
+      discipline: analysis.discipline,
+      locAuthority: locAuthorityContext
+        ? {
+          provider: locAuthorityContext.provider,
+          lcshCandidateCount: locAuthorityContext.lcshCandidates.length,
+          nameCandidateCount: locAuthorityContext.nameCandidates.length,
+          warnings: locAuthorityContext.warnings,
+        }
+        : undefined,
+      lcshAuthorityCandidates: locAuthorityContext?.lcshCandidates ?? undefined,
+      nameAuthorityCandidates: locAuthorityContext?.nameCandidates ?? undefined,
+      authorityAlignment: analysis.authorityAlignment ?? undefined,
+      openLibrary: openLibraryContext
+        ? {
+          provider: openLibraryContext.provider,
+          mode: openLibraryContext.mode,
+          matchType: openLibraryContext.matchType,
+          confidence: openLibraryContext.confidence,
+          warnings: openLibraryContext.warnings,
+        }
+        : undefined,
+      openLibraryBook: openLibraryContext?.book ?? undefined,
+      readingLevel: isAudiobook ? undefined : fleschKincaid ?? undefined,
+      gunningFog: isAudiobook ? undefined : gunningFog ?? undefined,
+    } as Record<string, unknown>;
+
+    const finalMetadata = mergeOpenLibraryMetadata(baseMetadata, openLibraryContext);
+
     const result = {
       metadata: {
-        ...parseResult.metadata,
-        lcc: analysis.lcc,
-        bisac: analysis.bisac,
-        lcsh: analysis.lcsh,
-        fieldOfStudy: analysis.fieldOfStudy,
-        discipline: analysis.discipline,
-        locAuthority: locAuthorityContext
-          ? {
-            provider: locAuthorityContext.provider,
-            lcshCandidateCount: locAuthorityContext.lcshCandidates.length,
-            nameCandidateCount: locAuthorityContext.nameCandidates.length,
-            warnings: locAuthorityContext.warnings,
-          }
-          : undefined,
-        lcshAuthorityCandidates: locAuthorityContext?.lcshCandidates ?? undefined,
-        nameAuthorityCandidates: locAuthorityContext?.nameCandidates ?? undefined,
-        authorityAlignment: analysis.authorityAlignment ?? undefined,
-        readingLevel: isAudiobook ? undefined : fleschKincaid ?? undefined,
-        gunningFog: isAudiobook ? undefined : gunningFog ?? undefined,
+        ...finalMetadata,
       },
       summary: analysis.summary,
       tableOfContents: parseResult.toc ?? null,
@@ -384,7 +412,8 @@ export async function analyzeExtractedText(req: Request, res: Response, next: Ne
     });
     const textHash = crypto.createHash('md5').update(hashInput).digest('hex');
     const locAuthorityFeatureKey = getLocAuthorityFeatureCacheKey();
-    const cacheKey = `text_${textHash}_${locAuthorityFeatureKey}`;
+    const openLibraryFeatureKey = getOpenLibraryFeatureCacheKey();
+    const cacheKey = `text_${textHash}_${locAuthorityFeatureKey}_${openLibraryFeatureKey}`;
 
     const cached = analysisCache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
@@ -404,6 +433,13 @@ export async function analyzeExtractedText(req: Request, res: Response, next: Ne
       subject: typeof metadata.subject === 'string' ? metadata.subject : undefined,
       keywords: typeof metadata.keywords === 'string' ? metadata.keywords : undefined,
     });
+    const openLibraryContext = await buildOpenLibraryContext({
+      title: typeof metadata.title === 'string' ? metadata.title : undefined,
+      author: typeof metadata.author === 'string' ? metadata.author : undefined,
+      identifier: typeof (metadata.identifier as any)?.value === 'string'
+        ? (metadata.identifier as any).value
+        : undefined,
+    });
 
     const fleschKincaid = isAudiobook ? null : calculateFleschKincaid(text);
     const gunningFog = isAudiobook ? null : calculateGunningFog(text);
@@ -414,6 +450,7 @@ export async function analyzeExtractedText(req: Request, res: Response, next: Ne
     try {
       analysis = await generateBookAnalysisWithProvider(text, aiSelection, {
         locAuthorityContext,
+        openLibraryContext,
       });
     } catch (aiError: any) {
       console.error('❌ AI analysis failed:', aiError.message);
@@ -424,27 +461,43 @@ export async function analyzeExtractedText(req: Request, res: Response, next: Ne
       });
     }
 
+    const baseMetadata = {
+      ...metadata,
+      lcc: analysis.lcc,
+      bisac: analysis.bisac,
+      lcsh: analysis.lcsh,
+      fieldOfStudy: analysis.fieldOfStudy,
+      discipline: analysis.discipline,
+      locAuthority: locAuthorityContext
+        ? {
+          provider: locAuthorityContext.provider,
+          lcshCandidateCount: locAuthorityContext.lcshCandidates.length,
+          nameCandidateCount: locAuthorityContext.nameCandidates.length,
+          warnings: locAuthorityContext.warnings,
+        }
+        : undefined,
+      lcshAuthorityCandidates: locAuthorityContext?.lcshCandidates ?? undefined,
+      nameAuthorityCandidates: locAuthorityContext?.nameCandidates ?? undefined,
+      authorityAlignment: analysis.authorityAlignment ?? undefined,
+      openLibrary: openLibraryContext
+        ? {
+          provider: openLibraryContext.provider,
+          mode: openLibraryContext.mode,
+          matchType: openLibraryContext.matchType,
+          confidence: openLibraryContext.confidence,
+          warnings: openLibraryContext.warnings,
+        }
+        : undefined,
+      openLibraryBook: openLibraryContext?.book ?? undefined,
+      readingLevel: isAudiobook ? undefined : fleschKincaid ?? undefined,
+      gunningFog: isAudiobook ? undefined : gunningFog ?? undefined,
+    } as Record<string, unknown>;
+
+    const finalMetadata = mergeOpenLibraryMetadata(baseMetadata, openLibraryContext);
+
     const result = {
       metadata: {
-        ...metadata,
-        lcc: analysis.lcc,
-        bisac: analysis.bisac,
-        lcsh: analysis.lcsh,
-        fieldOfStudy: analysis.fieldOfStudy,
-        discipline: analysis.discipline,
-        locAuthority: locAuthorityContext
-          ? {
-            provider: locAuthorityContext.provider,
-            lcshCandidateCount: locAuthorityContext.lcshCandidates.length,
-            nameCandidateCount: locAuthorityContext.nameCandidates.length,
-            warnings: locAuthorityContext.warnings,
-          }
-          : undefined,
-        lcshAuthorityCandidates: locAuthorityContext?.lcshCandidates ?? undefined,
-        nameAuthorityCandidates: locAuthorityContext?.nameCandidates ?? undefined,
-        authorityAlignment: analysis.authorityAlignment ?? undefined,
-        readingLevel: isAudiobook ? undefined : fleschKincaid ?? undefined,
-        gunningFog: isAudiobook ? undefined : gunningFog ?? undefined,
+        ...finalMetadata,
       },
       summary: analysis.summary,
       tableOfContents: null,

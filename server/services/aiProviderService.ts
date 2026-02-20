@@ -1,5 +1,6 @@
 import { BookAnalysis, generateBookAnalysis as generateGeminiBookAnalysis } from './geminiService';
 import type { LocAuthorityContext } from './locAuthorityService';
+import type { OpenLibraryContext } from './openLibraryService';
 
 export type AIProvider = 'google' | 'openai' | 'anthropic';
 
@@ -16,6 +17,7 @@ const DEFAULT_MODELS: Record<AIProvider, string> = {
 
 interface BookAnalysisOptions {
   locAuthorityContext?: LocAuthorityContext | null;
+  openLibraryContext?: OpenLibraryContext | null;
 }
 
 const buildPrompt = (bookText: string, options?: BookAnalysisOptions) => {
@@ -39,6 +41,21 @@ Instructions for authority use:
 - Prefer authority-backed LCSH headings when they are relevant to the text.
 - Keep authorityAlignment.usedAuthorityHeadings limited to headings you actually used in lcsh.
 - Keep authorityAlignment.usedNameAuthorities limited to names that materially influenced classification.
+`
+    : '';
+  const openLibraryPromptBlock = options?.openLibraryContext?.book
+    ? `
+Open Library bibliographic candidate (from mcp-open-library):
+${JSON.stringify({
+  matchType: options.openLibraryContext.matchType,
+  confidence: options.openLibraryContext.confidence,
+  book: options.openLibraryContext.book,
+})}
+
+Instructions for Open Library use:
+- Use Open Library evidence to disambiguate title/author/publisher/date context when relevant.
+- Prefer file-extracted metadata when it conflicts with high-confidence content evidence from the uploaded book text.
+- In authorityAlignment.notes, mention if Open Library evidence affected classification decisions.
 `
     : '';
 
@@ -71,6 +88,7 @@ Discipline: Agriculture, Architecture and Design, Business, Education, Engineeri
 
 Return the result as a single JSON object.
 ${authorityPromptBlock}
+${openLibraryPromptBlock}
 
 Here is the ebook text:
 ---
@@ -267,6 +285,7 @@ export const generateBookAnalysisWithProvider = async (
     return generateGeminiBookAnalysis(bookText, {
       model: selection.model,
       locAuthorityContext: options?.locAuthorityContext,
+      openLibraryContext: options?.openLibraryContext,
     });
   }
   if (selection.provider === 'openai') {

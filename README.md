@@ -194,6 +194,11 @@ Ai-Assisted-Ebook-Cataloger/
 | `PORT` | API server port (default: 3001) | No |
 | `ALLOWED_ORIGINS` | Comma-separated list of allowed browser origins for API CORS | No |
 | `SERVE_STATIC` | Set `false` when deploying API + frontend as separate Render services | No |
+| `ENABLE_LOC_AUTHORITY_ENRICHMENT` | Enable LOC authority enrichment | No |
+| `LOC_AUTHORITY_MCP_URL` | HTTP MCP endpoint for LOC authority service | No |
+| `ENABLE_OPEN_LIBRARY_ENRICHMENT` | Enable Open Library metadata enrichment | No |
+| `OPEN_LIBRARY_ENRICHMENT_MODE` | `shadow` or `apply` | No |
+| `OPEN_LIBRARY_MCP_URL` | HTTP MCP endpoint for Open Library service | No |
 
 ## Development & Testing
 
@@ -221,6 +226,12 @@ npm run server:watch
 
 # Start frontend with hot reload
 npm run dev
+
+# Start API + frontend
+npm run dev:all
+
+# Start API + frontend + LOC/OpenLibrary MCP bridges
+npm run dev:all-with-bridges
 
 # Build frontend for production
 npm run build

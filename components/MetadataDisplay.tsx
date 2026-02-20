@@ -12,6 +12,44 @@ interface LccClassification {
   subClass: string;
 }
 
+interface AuthorityAlignment {
+  usedAuthorityHeadings: string[];
+  usedNameAuthorities: string[];
+  notes?: string;
+}
+
+interface LocAuthoritySummary {
+  provider: string;
+  lcshCandidateCount: number;
+  nameCandidateCount: number;
+  warnings?: string[];
+}
+
+interface OpenLibrarySummary {
+  provider: string;
+  mode: 'shadow' | 'apply';
+  matchType: 'identifier' | 'title' | 'none';
+  confidence: number;
+  warnings?: string[];
+}
+
+interface OpenLibraryBook {
+  title?: string;
+  subtitle?: string;
+  authors?: string[];
+  publishers?: string[];
+  publishDate?: string;
+  numberOfPages?: number;
+  isbn10?: string[];
+  isbn13?: string[];
+  lccn?: string[];
+  oclc?: string[];
+  olid?: string[];
+  coverUrl?: string;
+  workKey?: string;
+  editionKey?: string;
+}
+
 export interface FileMetadata {
   title?: string;
   author?: string;
@@ -48,6 +86,10 @@ export interface FileMetadata {
   lcsh?: string[];
   fieldOfStudy?: string;
   discipline?: string;
+  locAuthority?: LocAuthoritySummary;
+  authorityAlignment?: AuthorityAlignment;
+  openLibrary?: OpenLibrarySummary;
+  openLibraryBook?: OpenLibraryBook;
   // Calculated
   readingLevel?: ReadingLevel;
   gunningFog?: ReadingLevel;
@@ -165,6 +207,10 @@ const AccessibilityListItem: React.FC<{
   return <MetadataListItem label={label} values={mappedValues} isDark={isDark} />;
 };
 
+const ProvenanceNote: React.FC<{ text: string; isDark: boolean }> = ({ text, isDark }) => (
+  <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>{text}</p>
+);
+
 
 export const MetadataDisplay: React.FC<MetadataDisplayProps> = ({ metadata, isDark }) => {
   if (!metadata || Object.values(metadata).every(v => !v || (Array.isArray(v) && v.length === 0))) {
@@ -175,6 +221,7 @@ export const MetadataDisplay: React.FC<MetadataDisplayProps> = ({ metadata, isDa
   const hasCoreInfo = metadata.title || metadata.author || metadata.narrator || metadata.publisher || metadata.publicationDate || metadata.identifier || metadata.pageCount || metadata.subject || metadata.keywords || metadata.epubVersion || metadata.language || metadata.duration || metadata.audioFormat || metadata.audioTrackCount;
   // FIX: Coerce truthy/falsy values to actual booleans to match the 'hasContent' prop type of the Section component.
   const hasClassificationInfo = !!(metadata.fieldOfStudy || metadata.discipline || (metadata.lcc && metadata.lcc.length > 0) || (metadata.bisac && metadata.bisac.length > 0) || (metadata.lcsh && metadata.lcsh.length > 0));
+  const hasProvenanceInfo = !!(metadata.locAuthority || metadata.openLibrary || metadata.authorityAlignment);
   const hasReadabilityInfo = !isAudiobook && !!(metadata.readingLevel || metadata.gunningFog);
   const hasAccessibilityInfo = !isAudiobook && !!(metadata.certification || (metadata.accessibilityFeatures && metadata.accessibilityFeatures.length > 0) || (metadata.accessModes && metadata.accessModes.length > 0) || (metadata.accessModesSufficient && metadata.accessModesSufficient.length > 0) || (metadata.hazards && metadata.hazards.length > 0));
 
@@ -234,6 +281,74 @@ export const MetadataDisplay: React.FC<MetadataDisplayProps> = ({ metadata, isDa
           {metadata.lcc && metadata.lcc.length > 0 && <LccDisplay classifications={metadata.lcc} isDark={isDark} />}
           {metadata.lcsh && metadata.lcsh.length > 0 && <MetadataListItem label="LCSH Headings" values={metadata.lcsh} isDark={isDark} />}
           {metadata.bisac && metadata.bisac.length > 0 && <BisacDisplay headings={metadata.bisac} isDark={isDark} />}
+        </dl>
+      </Section>
+
+      <Section title="Catalog Provenance" hasContent={hasProvenanceInfo} isDark={isDark}>
+        <dl className="space-y-4">
+          {metadata.locAuthority && (
+            <MetadataItem
+              label="Library of Congress Authority"
+              value={
+                <div className="space-y-1">
+                  <p>
+                    {metadata.locAuthority.lcshCandidateCount} subject candidates, {metadata.locAuthority.nameCandidateCount} name candidates.
+                  </p>
+                  {metadata.locAuthority.warnings && metadata.locAuthority.warnings.length > 0 && (
+                    <ProvenanceNote text={`Warnings: ${metadata.locAuthority.warnings.join(' | ')}`} isDark={isDark} />
+                  )}
+                </div>
+              }
+              isDark={isDark}
+            />
+          )}
+          {metadata.openLibrary && (
+            <MetadataItem
+              label="Open Library Enrichment"
+              value={
+                <div className="space-y-1">
+                  <p>
+                    Mode: {metadata.openLibrary.mode} | Match: {metadata.openLibrary.matchType} | Confidence: {metadata.openLibrary.confidence.toFixed(2)}
+                  </p>
+                  {metadata.openLibraryBook?.title && (
+                    <ProvenanceNote text={`Matched title: ${metadata.openLibraryBook.title}`} isDark={isDark} />
+                  )}
+                  {metadata.openLibraryBook?.authors && metadata.openLibraryBook.authors.length > 0 && (
+                    <ProvenanceNote text={`Matched authors: ${metadata.openLibraryBook.authors.join(', ')}`} isDark={isDark} />
+                  )}
+                  {metadata.openLibrary.warnings && metadata.openLibrary.warnings.length > 0 && (
+                    <ProvenanceNote text={`Warnings: ${metadata.openLibrary.warnings.join(' | ')}`} isDark={isDark} />
+                  )}
+                </div>
+              }
+              isDark={isDark}
+            />
+          )}
+          {metadata.authorityAlignment && (
+            <MetadataItem
+              label="Model Authority Alignment"
+              value={
+                <div className="space-y-1">
+                  {metadata.authorityAlignment.usedAuthorityHeadings.length > 0 && (
+                    <ProvenanceNote
+                      text={`Used authority headings: ${metadata.authorityAlignment.usedAuthorityHeadings.join(' | ')}`}
+                      isDark={isDark}
+                    />
+                  )}
+                  {metadata.authorityAlignment.usedNameAuthorities.length > 0 && (
+                    <ProvenanceNote
+                      text={`Used authority names: ${metadata.authorityAlignment.usedNameAuthorities.join(' | ')}`}
+                      isDark={isDark}
+                    />
+                  )}
+                  {metadata.authorityAlignment.notes && (
+                    <ProvenanceNote text={metadata.authorityAlignment.notes} isDark={isDark} />
+                  )}
+                </div>
+              }
+              isDark={isDark}
+            />
+          )}
         </dl>
       </Section>
       

@@ -322,6 +322,14 @@ LOC_AUTHORITY_MCP_URL=http://localhost:3002/mcp
 LOC_AUTHORITY_TIMEOUT_MS=3500
 LOC_AUTHORITY_MAX_RESULTS=5
 
+# Optional: Phase A/B Open Library metadata enrichment via mcp-open-library
+ENABLE_OPEN_LIBRARY_ENRICHMENT=false
+# Modes: shadow (collect/provenance only) | apply (merge metadata fields)
+OPEN_LIBRARY_ENRICHMENT_MODE=shadow
+OPEN_LIBRARY_MCP_URL=http://localhost:3003/mcp
+OPEN_LIBRARY_TIMEOUT_MS=3500
+OPEN_LIBRARY_MAX_RESULTS=5
+
 # Optional: local stdio->HTTP bridge for cataloger-mcp
 LOC_AUTHORITY_BRIDGE_PORT=3002
 LOC_AUTHORITY_BRIDGE_PATH=/mcp
@@ -329,12 +337,21 @@ LOC_AUTHORITY_BRIDGE_REQUEST_TIMEOUT_MS=15000
 LOC_AUTHORITY_STDIO_COMMAND=cataloger-mcp-server
 # Supports either JSON array or shell-style args string
 LOC_AUTHORITY_STDIO_ARGS=
+
+# Optional: local stdio->HTTP bridge for mcp-open-library
+OPEN_LIBRARY_BRIDGE_PORT=3003
+OPEN_LIBRARY_BRIDGE_PATH=/mcp
+OPEN_LIBRARY_BRIDGE_REQUEST_TIMEOUT_MS=15000
+OPEN_LIBRARY_STDIO_COMMAND=mcp-open-library
+# Supports either JSON array or shell-style args string
+OPEN_LIBRARY_STDIO_ARGS=
 ```
 
 Run the local bridge:
 
 ```bash
 npm run loc-mcp-bridge
+npm run open-library-mcp-bridge
 ```
 
 Then point API enrichment at the bridge endpoint:
@@ -342,6 +359,9 @@ Then point API enrichment at the bridge endpoint:
 ```env
 ENABLE_LOC_AUTHORITY_ENRICHMENT=true
 LOC_AUTHORITY_MCP_URL=http://localhost:3002/mcp
+ENABLE_OPEN_LIBRARY_ENRICHMENT=true
+OPEN_LIBRARY_ENRICHMENT_MODE=shadow
+OPEN_LIBRARY_MCP_URL=http://localhost:3003/mcp
 ```
 
 Get your Gemini API key from: https://aistudio.google.com/app/apikey

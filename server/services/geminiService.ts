@@ -1,5 +1,6 @@
 import { GoogleGenAI, Type } from '@google/genai';
 import type { LocAuthorityContext } from './locAuthorityService';
+import type { OpenLibraryContext } from './openLibraryService';
 
 function getApiKey(): string {
   const API_KEY = process.env.GEMINI_API_KEY || process.env.API_KEY;
@@ -40,7 +41,7 @@ export interface BookAnalysis {
 
 export async function generateBookAnalysis(
   bookText: string,
-  options?: { model?: string; locAuthorityContext?: LocAuthorityContext | null }
+  options?: { model?: string; locAuthorityContext?: LocAuthorityContext | null; openLibraryContext?: OpenLibraryContext | null }
 ): Promise<BookAnalysis> {
   const lcshCandidates = options?.locAuthorityContext?.lcshCandidates?.slice(0, 10) || [];
   const nameCandidates = options?.locAuthorityContext?.nameCandidates?.slice(0, 6) || [];
@@ -62,6 +63,21 @@ export async function generateBookAnalysis(
     - Prefer authority-backed LCSH headings when they are relevant to the text.
     - Keep authorityAlignment.usedAuthorityHeadings limited to headings you actually used in lcsh.
     - Keep authorityAlignment.usedNameAuthorities limited to names that materially influenced classification.
+    `
+    : '';
+  const openLibraryPromptBlock = options?.openLibraryContext?.book
+    ? `
+    Open Library bibliographic candidate (from mcp-open-library):
+    ${JSON.stringify({
+      matchType: options.openLibraryContext.matchType,
+      confidence: options.openLibraryContext.confidence,
+      book: options.openLibraryContext.book,
+    })}
+
+    Instructions for Open Library use:
+    - Use Open Library evidence to disambiguate title/author/publisher/date context when relevant.
+    - Prefer file-extracted metadata when it conflicts with high-confidence content evidence from the uploaded book text.
+    - In authorityAlignment.notes, mention if Open Library evidence affected classification decisions.
     `
     : '';
 
@@ -94,6 +110,7 @@ export async function generateBookAnalysis(
 
     Return the result as a single JSON object.
     ${authorityPromptBlock}
+    ${openLibraryPromptBlock}
 
     Here is the ebook text:
     ---
