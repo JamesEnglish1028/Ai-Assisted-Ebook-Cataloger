@@ -1,4 +1,5 @@
 import { GoogleGenAI, Type } from '@google/genai';
+import type { LocAuthorityContext } from './locAuthorityService';
 
 function getApiKey(): string {
   const API_KEY = process.env.GEMINI_API_KEY || process.env.API_KEY;
@@ -30,12 +31,40 @@ export interface BookAnalysis {
   lcsh: string[];
   fieldOfStudy: string;
   discipline: string;
+  authorityAlignment?: {
+    usedAuthorityHeadings: string[];
+    usedNameAuthorities: string[];
+    notes?: string;
+  };
 }
 
 export async function generateBookAnalysis(
   bookText: string,
-  options?: { model?: string }
+  options?: { model?: string; locAuthorityContext?: LocAuthorityContext | null }
 ): Promise<BookAnalysis> {
+  const lcshCandidates = options?.locAuthorityContext?.lcshCandidates?.slice(0, 10) || [];
+  const nameCandidates = options?.locAuthorityContext?.nameCandidates?.slice(0, 6) || [];
+  const authorityPromptBlock = lcshCandidates.length > 0 || nameCandidates.length > 0
+    ? `
+    Library of Congress authority candidates (from cataloger-mcp):
+    ${JSON.stringify({
+      lcshCandidates: lcshCandidates.map((candidate) => ({
+        heading: candidate.heading,
+        uri: candidate.uri || null,
+      })),
+      nameCandidates: nameCandidates.map((candidate) => ({
+        label: candidate.label,
+        uri: candidate.uri || null,
+      })),
+    })}
+
+    Instructions for authority use:
+    - Prefer authority-backed LCSH headings when they are relevant to the text.
+    - Keep authorityAlignment.usedAuthorityHeadings limited to headings you actually used in lcsh.
+    - Keep authorityAlignment.usedNameAuthorities limited to names that materially influenced classification.
+    `
+    : '';
+
   const prompt = `
     You are an expert librarian with deep knowledge of MARC records cataloging and book classifications using LCC, LCSH, and BISAC classification systems.
     Analyze the following text from an ebook and perform the following tasks:
@@ -64,6 +93,7 @@ export async function generateBookAnalysis(
     ---
 
     Return the result as a single JSON object.
+    ${authorityPromptBlock}
 
     Here is the ebook text:
     ---
@@ -127,7 +157,22 @@ export async function generateBookAnalysis(
               discipline: {
                 type: Type.STRING,
                 description: "The primary Discipline for the book, chosen from the provided list."
-              }
+              },
+              authorityAlignment: {
+                type: Type.OBJECT,
+                properties: {
+                  usedAuthorityHeadings: {
+                    type: Type.ARRAY,
+                    items: { type: Type.STRING }
+                  },
+                  usedNameAuthorities: {
+                    type: Type.ARRAY,
+                    items: { type: Type.STRING }
+                  },
+                  notes: { type: Type.STRING }
+                },
+                required: ['usedAuthorityHeadings', 'usedNameAuthorities']
+              },
             },
             required: ['summary', 'lcc', 'bisac', 'lcsh', 'fieldOfStudy', 'discipline']
           }

@@ -8,6 +8,10 @@ import {
   transcribeAudioWithProvider,
 } from '../services/audioTranscriptionService';
 import { calculateFleschKincaid, calculateGunningFog } from '../services/textAnalysis';
+import {
+  buildLocAuthorityContext,
+  getLocAuthorityFeatureCacheKey,
+} from '../services/locAuthorityService';
 
 // Simple in-memory cache (in production, use Redis or similar)
 const analysisCache = new Map<string, any>();
@@ -117,7 +121,8 @@ export async function analyzeBook(req: Request, res: Response, next: NextFunctio
     const fileHash = crypto.createHash('md5').update(file.buffer).digest('hex');
     const extractCover = req.query.extractCover === 'true';
     const maxTextLength = parseRequestedMaxTextLength(req);
-    const cacheKey = `${fileHash}_${extractCover}_${maxTextLength}_${aiSelection.provider}_${aiSelection.model}`;
+    const locAuthorityFeatureKey = getLocAuthorityFeatureCacheKey();
+    const cacheKey = `${fileHash}_${extractCover}_${maxTextLength}_${aiSelection.provider}_${aiSelection.model}_${locAuthorityFeatureKey}`;
     
     // Check cache first
     const cached = analysisCache.get(cacheKey);
@@ -216,6 +221,14 @@ export async function analyzeBook(req: Request, res: Response, next: NextFunctio
       }
     }
 
+    const locAuthorityContext = await buildLocAuthorityContext({
+      title: parseResult.metadata.title,
+      author: parseResult.metadata.author,
+      narrator: parseResult.metadata.narrator,
+      subject: parseResult.metadata.subject,
+      keywords: parseResult.metadata.keywords,
+    });
+
     // Calculate reading level metrics
     const fleschKincaid = isAudiobook ? null : calculateFleschKincaid(analysisText);
     const gunningFog = isAudiobook ? null : calculateGunningFog(analysisText);
@@ -225,7 +238,9 @@ export async function analyzeBook(req: Request, res: Response, next: NextFunctio
     // Generate AI analysis with error handling
     let analysis;
     try {
-      analysis = await generateBookAnalysisWithProvider(analysisText, aiSelection);
+      analysis = await generateBookAnalysisWithProvider(analysisText, aiSelection, {
+        locAuthorityContext,
+      });
     } catch (aiError: any) {
       console.error('❌ AI analysis failed:', aiError.message);
       return res.status(503).json({
@@ -246,6 +261,17 @@ export async function analyzeBook(req: Request, res: Response, next: NextFunctio
         lcsh: analysis.lcsh,
         fieldOfStudy: analysis.fieldOfStudy,
         discipline: analysis.discipline,
+        locAuthority: locAuthorityContext
+          ? {
+            provider: locAuthorityContext.provider,
+            lcshCandidateCount: locAuthorityContext.lcshCandidates.length,
+            nameCandidateCount: locAuthorityContext.nameCandidates.length,
+            warnings: locAuthorityContext.warnings,
+          }
+          : undefined,
+        lcshAuthorityCandidates: locAuthorityContext?.lcshCandidates ?? undefined,
+        nameAuthorityCandidates: locAuthorityContext?.nameCandidates ?? undefined,
+        authorityAlignment: analysis.authorityAlignment ?? undefined,
         readingLevel: isAudiobook ? undefined : fleschKincaid ?? undefined,
         gunningFog: isAudiobook ? undefined : gunningFog ?? undefined,
       },
@@ -357,7 +383,8 @@ export async function analyzeExtractedText(req: Request, res: Response, next: Ne
       maxTextLength,
     });
     const textHash = crypto.createHash('md5').update(hashInput).digest('hex');
-    const cacheKey = `text_${textHash}`;
+    const locAuthorityFeatureKey = getLocAuthorityFeatureCacheKey();
+    const cacheKey = `text_${textHash}_${locAuthorityFeatureKey}`;
 
     const cached = analysisCache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
@@ -370,6 +397,14 @@ export async function analyzeExtractedText(req: Request, res: Response, next: Ne
     }
 
     const isAudiobook = fileType === 'audiobook';
+    const locAuthorityContext = await buildLocAuthorityContext({
+      title: typeof metadata.title === 'string' ? metadata.title : undefined,
+      author: typeof metadata.author === 'string' ? metadata.author : undefined,
+      narrator: typeof metadata.narrator === 'string' ? metadata.narrator : undefined,
+      subject: typeof metadata.subject === 'string' ? metadata.subject : undefined,
+      keywords: typeof metadata.keywords === 'string' ? metadata.keywords : undefined,
+    });
+
     const fleschKincaid = isAudiobook ? null : calculateFleschKincaid(text);
     const gunningFog = isAudiobook ? null : calculateGunningFog(text);
 
@@ -377,7 +412,9 @@ export async function analyzeExtractedText(req: Request, res: Response, next: Ne
 
     let analysis;
     try {
-      analysis = await generateBookAnalysisWithProvider(text, aiSelection);
+      analysis = await generateBookAnalysisWithProvider(text, aiSelection, {
+        locAuthorityContext,
+      });
     } catch (aiError: any) {
       console.error('❌ AI analysis failed:', aiError.message);
       return res.status(503).json({
@@ -395,6 +432,17 @@ export async function analyzeExtractedText(req: Request, res: Response, next: Ne
         lcsh: analysis.lcsh,
         fieldOfStudy: analysis.fieldOfStudy,
         discipline: analysis.discipline,
+        locAuthority: locAuthorityContext
+          ? {
+            provider: locAuthorityContext.provider,
+            lcshCandidateCount: locAuthorityContext.lcshCandidates.length,
+            nameCandidateCount: locAuthorityContext.nameCandidates.length,
+            warnings: locAuthorityContext.warnings,
+          }
+          : undefined,
+        lcshAuthorityCandidates: locAuthorityContext?.lcshCandidates ?? undefined,
+        nameAuthorityCandidates: locAuthorityContext?.nameCandidates ?? undefined,
+        authorityAlignment: analysis.authorityAlignment ?? undefined,
         readingLevel: isAudiobook ? undefined : fleschKincaid ?? undefined,
         gunningFog: isAudiobook ? undefined : gunningFog ?? undefined,
       },

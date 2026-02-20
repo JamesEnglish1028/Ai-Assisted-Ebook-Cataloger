@@ -67,21 +67,22 @@ If you prefer manual setup instead of render.yaml:
 ```
 Name: ai-ebook-cataloger-api
 Environment: Node
-Build Command: npm ci
+Build Command: npm ci && npm run ci:render-api
 Start Command: npm run start
 ```
+This build command runs a lightweight API smoke test (`tests/textAnalysis.test.ts`) that does not require opening network sockets during Render build.
 
 2. **Static Site:**
 ```
 Name: ai-ebook-cataloger-web
-Build Command: npm ci && npm run build
+Build Command: npm ci && npm run ci:render-web
 Publish Directory: dist
 ```
 
 2. **Advanced Settings:**
    ```
    Plan: Starter
-   Node Version: 18 (latest LTS)
+   Node Version: 22 (latest LTS)
    Health Check Path: /health
    ```
 
@@ -97,6 +98,7 @@ GEMINI_API_KEY=your_actual_gemini_api_key_here
 # Automatic - Set by Render
 NODE_ENV=production
 PORT=10000
+NODE_VERSION=22
 
 ```
 
@@ -158,7 +160,7 @@ services:
       name: ai-ebook-cataloger-api
       env: node
       plan: starter
-      buildCommand: npm ci
+      buildCommand: npm ci && npm run ci:render-api
       startCommand: npm run start
       healthCheckPath: /health
       region: oregon
@@ -167,6 +169,8 @@ services:
       envVars:
          - key: NODE_ENV
             value: production
+         - key: NODE_VERSION
+            value: "22"
          - key: GEMINI_API_KEY
             sync: false
          - key: PORT
@@ -174,7 +178,7 @@ services:
 
 staticSites:
    - name: ai-ebook-cataloger-web
-      buildCommand: npm ci && npm run build
+      buildCommand: npm ci && npm run ci:render-web
       staticPublishPath: dist
       envVars:
          - key: VITE_API_BASE_URL

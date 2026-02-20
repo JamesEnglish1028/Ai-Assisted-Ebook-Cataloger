@@ -1,4 +1,5 @@
 import { BookAnalysis, generateBookAnalysis as generateGeminiBookAnalysis } from './geminiService';
+import type { LocAuthorityContext } from './locAuthorityService';
 
 export type AIProvider = 'google' | 'openai' | 'anthropic';
 
@@ -13,7 +14,35 @@ const DEFAULT_MODELS: Record<AIProvider, string> = {
   anthropic: 'claude-3-5-haiku-latest',
 };
 
-const buildPrompt = (bookText: string) => `
+interface BookAnalysisOptions {
+  locAuthorityContext?: LocAuthorityContext | null;
+}
+
+const buildPrompt = (bookText: string, options?: BookAnalysisOptions) => {
+  const lcshCandidates = options?.locAuthorityContext?.lcshCandidates?.slice(0, 10) || [];
+  const nameCandidates = options?.locAuthorityContext?.nameCandidates?.slice(0, 6) || [];
+  const authorityPromptBlock = lcshCandidates.length > 0 || nameCandidates.length > 0
+    ? `
+Library of Congress authority candidates (from cataloger-mcp):
+${JSON.stringify({
+  lcshCandidates: lcshCandidates.map((candidate) => ({
+    heading: candidate.heading,
+    uri: candidate.uri || null,
+  })),
+  nameCandidates: nameCandidates.map((candidate) => ({
+    label: candidate.label,
+    uri: candidate.uri || null,
+  })),
+})}
+
+Instructions for authority use:
+- Prefer authority-backed LCSH headings when they are relevant to the text.
+- Keep authorityAlignment.usedAuthorityHeadings limited to headings you actually used in lcsh.
+- Keep authorityAlignment.usedNameAuthorities limited to names that materially influenced classification.
+`
+    : '';
+
+  return `
 You are an expert librarian with deep knowledge of MARC records cataloging and book classifications using LCC, LCSH, and BISAC classification systems.
 Analyze the following text from an ebook and perform the following tasks:
 1.  Generate a compelling 1 paragraphs book summary for an online library catalog. The summary should capture the essence of the plot, key themes, and the overall tone of the book, enticing potential readers without revealing major spoilers.
@@ -41,12 +70,14 @@ Discipline: Agriculture, Architecture and Design, Business, Education, Engineeri
 ---
 
 Return the result as a single JSON object.
+${authorityPromptBlock}
 
 Here is the ebook text:
 ---
 ${bookText}
 ---
 `;
+};
 
 const ANALYSIS_SCHEMA = {
   type: 'object',
@@ -69,6 +100,16 @@ const ANALYSIS_SCHEMA = {
     lcsh: { type: 'array', items: { type: 'string' } },
     fieldOfStudy: { type: 'string' },
     discipline: { type: 'string' },
+    authorityAlignment: {
+      type: 'object',
+      properties: {
+        usedAuthorityHeadings: { type: 'array', items: { type: 'string' } },
+        usedNameAuthorities: { type: 'array', items: { type: 'string' } },
+        notes: { type: 'string' },
+      },
+      required: ['usedAuthorityHeadings', 'usedNameAuthorities'],
+      additionalProperties: false,
+    },
   },
   required: ['summary', 'lcc', 'bisac', 'lcsh', 'fieldOfStudy', 'discipline'],
   additionalProperties: false,
@@ -111,7 +152,11 @@ const getRequiredEnv = (name: string): string => {
   return value;
 };
 
-const generateWithOpenAI = async (bookText: string, model: string): Promise<BookAnalysis> => {
+const generateWithOpenAI = async (
+  bookText: string,
+  model: string,
+  options?: BookAnalysisOptions,
+): Promise<BookAnalysis> => {
   const apiKey = getRequiredEnv('OPENAI_API_KEY');
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -127,7 +172,7 @@ const generateWithOpenAI = async (bookText: string, model: string): Promise<Book
           role: 'system',
           content: 'You are a precise cataloging assistant. Return only JSON matching the schema.',
         },
-        { role: 'user', content: buildPrompt(bookText) },
+        { role: 'user', content: buildPrompt(bookText, options) },
       ],
       response_format: {
         type: 'json_schema',
@@ -154,7 +199,11 @@ const generateWithOpenAI = async (bookText: string, model: string): Promise<Book
   return parseAnalysis(content);
 };
 
-const generateWithAnthropic = async (bookText: string, model: string): Promise<BookAnalysis> => {
+const generateWithAnthropic = async (
+  bookText: string,
+  model: string,
+  options?: BookAnalysisOptions,
+): Promise<BookAnalysis> => {
   const apiKey = getRequiredEnv('ANTHROPIC_API_KEY');
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -171,7 +220,7 @@ const generateWithAnthropic = async (bookText: string, model: string): Promise<B
       messages: [
         {
           role: 'user',
-          content: buildPrompt(bookText),
+          content: buildPrompt(bookText, options),
         },
       ],
     }),
@@ -211,13 +260,17 @@ export const resolveAISelection = (
 
 export const generateBookAnalysisWithProvider = async (
   bookText: string,
-  selection: AISelection
+  selection: AISelection,
+  options?: BookAnalysisOptions,
 ): Promise<BookAnalysis> => {
   if (selection.provider === 'google') {
-    return generateGeminiBookAnalysis(bookText, { model: selection.model });
+    return generateGeminiBookAnalysis(bookText, {
+      model: selection.model,
+      locAuthorityContext: options?.locAuthorityContext,
+    });
   }
   if (selection.provider === 'openai') {
-    return generateWithOpenAI(bookText, selection.model);
+    return generateWithOpenAI(bookText, selection.model, options);
   }
-  return generateWithAnthropic(bookText, selection.model);
+  return generateWithAnthropic(bookText, selection.model, options);
 };

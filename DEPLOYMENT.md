@@ -25,13 +25,14 @@ This guide will help you deploy the AI Ebook Cataloger to Render using separate 
 - **Branch**: `main`
 
 **Build & Deploy Settings:**
-- **Build Command**: `npm ci`
+- **Build Command**: `npm ci && npm run ci:render-api`
 - **Start Command**: `npm start`
+  - This CI step runs a lightweight API smoke test (`tests/textAnalysis.test.ts`) during Render build.
 
 **Static Site Settings:**
 - **Name**: `ai-ebook-cataloger-web`
 - **Branch**: `main`
-- **Build Command**: `npm ci && npm run build`
+- **Build Command**: `npm ci && npm run ci:render-web`
 - **Publish Directory**: `dist`
 
 ### 3. Set Environment Variables
@@ -41,6 +42,7 @@ In the Render dashboard, add these environment variables:
 | Key | Value | Notes |
 |-----|-------|-------|
 | `NODE_ENV` | `production` | API service |
+| `NODE_VERSION` | `22` | API service runtime |
 | `GEMINI_API_KEY` | `your_api_key_here` | API service |
 | `VITE_API_BASE_URL` | `https://ai-ebook-cataloger-api.onrender.com` | Static site |
 

@@ -316,6 +316,32 @@ Create a `.env` file in the project root:
 ```env
 GEMINI_API_KEY=your_gemini_api_key_here
 PORT=3001
+# Optional: Phase 1 LOC authority enrichment via cataloger-mcp
+ENABLE_LOC_AUTHORITY_ENRICHMENT=false
+LOC_AUTHORITY_MCP_URL=http://localhost:3002/mcp
+LOC_AUTHORITY_TIMEOUT_MS=3500
+LOC_AUTHORITY_MAX_RESULTS=5
+
+# Optional: local stdio->HTTP bridge for cataloger-mcp
+LOC_AUTHORITY_BRIDGE_PORT=3002
+LOC_AUTHORITY_BRIDGE_PATH=/mcp
+LOC_AUTHORITY_BRIDGE_REQUEST_TIMEOUT_MS=15000
+LOC_AUTHORITY_STDIO_COMMAND=cataloger-mcp-server
+# Supports either JSON array or shell-style args string
+LOC_AUTHORITY_STDIO_ARGS=
+```
+
+Run the local bridge:
+
+```bash
+npm run loc-mcp-bridge
+```
+
+Then point API enrichment at the bridge endpoint:
+
+```env
+ENABLE_LOC_AUTHORITY_ENRICHMENT=true
+LOC_AUTHORITY_MCP_URL=http://localhost:3002/mcp
 ```
 
 Get your Gemini API key from: https://aistudio.google.com/app/apikey

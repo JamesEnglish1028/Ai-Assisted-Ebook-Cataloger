@@ -3,7 +3,7 @@ services:
     name: ai-ebook-cataloger-api
     env: node
     plan: starter
-    buildCommand: npm ci
+    buildCommand: npm ci && npm run ci:render-api
     startCommand: npm run start
     healthCheckPath: /health
     region: oregon
@@ -12,6 +12,8 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: NODE_VERSION
+        value: "22"
       - key: GEMINI_API_KEY
         sync: false
       - key: OPENAI_API_KEY
@@ -25,7 +27,7 @@ services:
 
 staticSites:
   - name: ai-ebook-cataloger-web
-    buildCommand: npm ci && npm run build
+    buildCommand: npm ci && npm run ci:render-web
     staticPublishPath: dist
     envVars:
       - key: VITE_API_BASE_URL
