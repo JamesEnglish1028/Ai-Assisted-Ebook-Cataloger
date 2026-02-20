@@ -256,14 +256,16 @@ This application is ready for deployment on **Render** (recommended) or similar 
 
 ### Render.com Configuration (Exact Values)
 
-This repo is configured for **two Render services** from one repository:
-1. `ai-ebook-cataloger-api` (Web Service, Node API)
-2. `ai-ebook-cataloger-web` (Static Site, React frontend)
-
-Use **Blueprint Deploy** with the included `render.yaml`:
+Use **Blueprint Deploy** with the included `render.yaml` for the API + frontend:
 1. In Render, go to `New` -> `Blueprint`.
 2. Select this GitHub repo.
-3. Render will detect and create both services from `render.yaml`.
+3. Render will create:
+   - `ai-ebook-cataloger-api` (Web Service)
+   - `ai-ebook-cataloger-web` (Static Site)
+
+If you want MCP enrichment in production, also add two additional **Web Services** manually:
+1. `ai-ebook-cataloger-loc-bridge` (LOC MCP bridge)
+2. `ai-ebook-cataloger-openlib-bridge` (Open Library MCP bridge)
 
 #### API service (`ai-ebook-cataloger-api`)
 
@@ -272,35 +274,79 @@ Set/verify these values in Render:
 2. `Environment`: `Node`
 3. `Plan`: `starter`
 4. `Region`: `oregon`
-5. `Build Command`: `npm ci`
+5. `Build Command`: `npm ci && npm run ci:render-api`
 6. `Start Command`: `npm run start`
 7. `Health Check Path`: `/health`
 8. `Environment Variables`:
    - `NODE_ENV=production`
+   - `NODE_VERSION=22`
    - `SERVE_STATIC=false`
    - `GEMINI_API_KEY` (set if using Google provider)
    - `OPENAI_API_KEY` (set if using OpenAI provider)
    - `ANTHROPIC_API_KEY` (set if using Anthropic provider)
-   - `ALLOWED_ORIGINS` (recommended: set to your static-site URL, e.g. `https://ai-ebook-cataloger-web.onrender.com`)
+   - `ALLOWED_ORIGINS` (set to your static-site URL, e.g. `https://ai-ebook-cataloger-web.onrender.com`)
+   - `ENABLE_LOC_AUTHORITY_ENRICHMENT=true`
+   - `LOC_AUTHORITY_MCP_URL=https://<your-loc-bridge>.onrender.com/mcp`
+   - `LOC_AUTHORITY_TIMEOUT_MS=3500`
+   - `LOC_AUTHORITY_MAX_RESULTS=5`
+   - `ENABLE_OPEN_LIBRARY_ENRICHMENT=true`
+   - `OPEN_LIBRARY_ENRICHMENT_MODE=shadow` (recommended rollout start)
+   - `OPEN_LIBRARY_MCP_URL=https://<your-openlib-bridge>.onrender.com/mcp`
+   - `OPEN_LIBRARY_TIMEOUT_MS=3500`
+   - `OPEN_LIBRARY_MAX_RESULTS=5`
 
 #### Frontend static site (`ai-ebook-cataloger-web`)
 
 Set/verify these values in Render:
 1. `Type`: `Static Site`
-2. `Build Command`: `npm ci && npm run build`
+2. `Build Command`: `npm ci && npm run ci:render-web`
 3. `Publish Directory`: `dist`
 4. `Environment Variables`:
-   - `VITE_API_BASE_URL=https://ai-ebook-cataloger-api.onrender.com` (use your actual API URL)
+   - `VITE_API_BASE_URL=https://<your-api>.onrender.com`
 5. `Routes` rewrite:
    - Source: `/*`
    - Destination: `/index.html`
 
+#### LOC bridge service (`ai-ebook-cataloger-loc-bridge`)
+
+Create a Render **Web Service** from the same repo:
+1. `Build Command`: `npm ci`
+2. `Start Command`: `npm run loc-mcp-bridge`
+3. `Health Check Path`: `/health`
+4. `Environment Variables` (minimum):
+   - `NODE_ENV=production`
+   - `LOC_AUTHORITY_BRIDGE_PORT=10000`
+   - `LOC_AUTHORITY_BRIDGE_PATH=/mcp`
+   - `LOC_AUTHORITY_STDIO_COMMAND=cataloger-mcp-server`
+   - `LOC_AUTHORITY_STDIO_ARGS=` (optional)
+
+#### Open Library bridge service (`ai-ebook-cataloger-openlib-bridge`)
+
+Create another Render **Web Service** from the same repo:
+1. `Build Command`: `npm ci`
+2. `Start Command`: `npm run open-library-mcp-bridge`
+3. `Health Check Path`: `/health`
+4. `Environment Variables` (minimum):
+   - `NODE_ENV=production`
+   - `OPEN_LIBRARY_BRIDGE_PORT=10000`
+   - `OPEN_LIBRARY_BRIDGE_PATH=/mcp`
+   - `OPEN_LIBRARY_STDIO_COMMAND=mcp-open-library`
+   - `OPEN_LIBRARY_STDIO_ARGS=` (optional)
+
 #### Post-deploy checks
 
 1. Open API health endpoint: `https://<your-api>.onrender.com/health`
-2. Open frontend URL and upload a test PDF/EPUB.
-3. In the UI, select provider/model and confirm analysis succeeds.
-4. If browser calls fail, verify `ALLOWED_ORIGINS` on API includes your static site URL.
+2. Open bridge health endpoints:
+   - `https://<your-loc-bridge>.onrender.com/health`
+   - `https://<your-openlib-bridge>.onrender.com/health`
+3. Open frontend URL and upload a test PDF/EPUB.
+4. In the API response metadata, verify provenance fields:
+   - `locAuthority`
+   - `openLibrary`
+   - `authorityAlignment`
+5. If browser calls fail, verify `ALLOWED_ORIGINS` includes your static site URL.
+
+Note: no LoC/Open Library API keys are required for this architecture; only your AI provider keys are required.
 
 **For detailed deployment instructions, see:** [RENDER_DEPLOYMENT.md](./RENDER_DEPLOYMENT.md)
 
