@@ -21,6 +21,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
+import { readFile } from 'fs/promises';
 import { fileURLToPath } from 'url';
 import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
@@ -30,6 +31,7 @@ import bookAnalysisRouter from './routes/bookAnalysis';
 // ES Module __dirname equivalent
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const apiDocumentationPath = path.join(__dirname, '../API_DOCUMENTATION.md');
 
 // Load environment variables from .env file
 dotenv.config();
@@ -115,6 +117,50 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', message: 'AI Ebook Cataloger API is running' });
 });
 
+const escapeHtml = (value: string): string =>
+  value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+app.get('/rdoc', async (req, res) => {
+  try {
+    const markdown = await readFile(apiDocumentationPath, 'utf8');
+    const escaped = escapeHtml(markdown);
+    res
+      .status(200)
+      .type('html')
+      .send(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Ebook Cataloger API Documentation</title>
+  <style>
+    :root { color-scheme: light; }
+    body { margin: 0; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; background: #f8fafc; color: #0f172a; }
+    main { max-width: 960px; margin: 0 auto; padding: 24px; }
+    pre { white-space: pre-wrap; word-break: break-word; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 20px; line-height: 1.45; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <main>
+    <pre>${escaped}</pre>
+  </main>
+</body>
+</html>`);
+  } catch (error: any) {
+    console.error('❌ Unable to load API documentation for /rdoc:', error?.message || error);
+    res.status(500).json({
+      error: 'Documentation unavailable',
+      code: 'DOC_UNAVAILABLE',
+      message: 'Could not load API documentation content.',
+    });
+  }
+});
+
 // In production, serve the React app for all non-API routes
 if (process.env.NODE_ENV === 'production' && SERVE_STATIC) {
   // Serve React app for root route
@@ -149,6 +195,7 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 API Server running on port ${PORT}`);
   console.log(`📚 Health check: /health`);
+  console.log(`📘 API docs: /rdoc`);
   console.log(`📖 Analyze endpoint: /api/analyze-book`);
   if (process.env.NODE_ENV === 'production') {
     if (SERVE_STATIC) {

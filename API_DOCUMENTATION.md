@@ -10,6 +10,16 @@ http://localhost:3001
 
 ## Endpoints
 
+### API Documentation (RDoc)
+
+**GET** `/rdoc`
+
+Renders this API documentation as an HTML page served directly by the API server.
+
+**Response:**
+- `200 OK` HTML page containing the current `API_DOCUMENTATION.md` content
+- `500` JSON error if documentation cannot be loaded
+
 ### Health Check
 
 **GET** `/health`
