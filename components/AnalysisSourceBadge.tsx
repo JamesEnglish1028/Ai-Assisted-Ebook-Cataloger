@@ -12,12 +12,12 @@ interface AnalysisSourceBadgeProps {
 const getProviderMeta = (provider?: AIProvider): { label: string; short: string; bg: string; text: string } => {
   const key = (provider || '').toLowerCase();
   if (key === 'openai') {
-    return { label: 'OpenAI', short: 'O', bg: 'bg-amber-200', text: 'text-amber-900' };
+    return { label: 'AI: OpenAI', short: 'O', bg: 'bg-amber-200', text: 'text-amber-900' };
   }
   if (key === 'anthropic' || key === 'claude') {
-    return { label: 'Anthropic', short: 'A', bg: 'bg-amber-200', text: 'text-amber-900' };
+    return { label: 'AI: Claude', short: 'C', bg: 'bg-amber-200', text: 'text-amber-900' };
   }
-  return { label: 'Google', short: 'G', bg: 'bg-amber-200', text: 'text-amber-900' };
+  return { label: 'AI: Gemini', short: 'G', bg: 'bg-amber-200', text: 'text-amber-900' };
 };
 
 export const AnalysisSourceBadge: React.FC<AnalysisSourceBadgeProps> = ({ source, aiProvider, aiModel, isDark }) => {
