@@ -353,7 +353,7 @@ Create another Render **Web Service** from the same repo:
 
 #### Post-deploy checks
 
-1. Open API health endpoint: `https://<your-api>.onrender.com/health`
+1. Open API health endpoint: `https://<your-api>.onrender.com/health` (alias: `/api/health`)
 2. Open bridge health endpoints:
    - `https://<your-loc-bridge>.onrender.com/health`
    - `https://<your-openlib-bridge>.onrender.com/health`

@@ -112,10 +112,13 @@ if (process.env.NODE_ENV === 'production' && SERVE_STATIC) {
 app.use('/api', bookAnalysisRouter);
 
 // Health check endpoint
-app.get('/health', (req, res) => {
+const healthHandler = (req: express.Request, res: express.Response) => {
   console.log('✅ Health check endpoint called');
   res.json({ status: 'ok', message: 'AI Ebook Cataloger API is running' });
-});
+};
+
+app.get('/health', healthHandler);
+app.get('/api/health', healthHandler);
 
 const escapeHtml = (value: string): string =>
   value

@@ -23,6 +23,7 @@ Renders this API documentation as an HTML page served directly by the API server
 ### Health Check
 
 **GET** `/health`
+**GET** `/api/health`
 
 Check if the API server is running.
 
