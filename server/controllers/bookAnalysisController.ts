@@ -17,6 +17,12 @@ import {
   getOpenLibraryFeatureCacheKey,
   mergeOpenLibraryMetadata,
 } from '../services/openLibraryService';
+import {
+  buildHardcoverContext,
+  buildHardcoverContributionCandidate,
+  getHardcoverFeatureCacheKey,
+  mergeHardcoverMetadata,
+} from '../services/hardcoverService';
 
 // Simple in-memory cache (in production, use Redis or similar)
 const analysisCache = new Map<string, any>();
@@ -128,7 +134,8 @@ export async function analyzeBook(req: Request, res: Response, next: NextFunctio
     const maxTextLength = parseRequestedMaxTextLength(req);
     const locAuthorityFeatureKey = getLocAuthorityFeatureCacheKey();
     const openLibraryFeatureKey = getOpenLibraryFeatureCacheKey();
-    const cacheKey = `${fileHash}_${extractCover}_${maxTextLength}_${aiSelection.provider}_${aiSelection.model}_${locAuthorityFeatureKey}_${openLibraryFeatureKey}`;
+    const hardcoverFeatureKey = getHardcoverFeatureCacheKey();
+    const cacheKey = `${fileHash}_${extractCover}_${maxTextLength}_${aiSelection.provider}_${aiSelection.model}_${locAuthorityFeatureKey}_${openLibraryFeatureKey}_${hardcoverFeatureKey}`;
     
     // Check cache first
     const cached = analysisCache.get(cacheKey);
@@ -239,6 +246,11 @@ export async function analyzeBook(req: Request, res: Response, next: NextFunctio
       author: parseResult.metadata.author,
       identifier: parseResult.metadata.identifier?.value,
     });
+    const hardcoverContext = await buildHardcoverContext({
+      title: parseResult.metadata.title,
+      author: parseResult.metadata.author,
+      identifier: parseResult.metadata.identifier?.value,
+    });
 
     // Calculate reading level metrics
     const fleschKincaid = isAudiobook ? null : calculateFleschKincaid(analysisText);
@@ -252,6 +264,7 @@ export async function analyzeBook(req: Request, res: Response, next: NextFunctio
       analysis = await generateBookAnalysisWithProvider(analysisText, aiSelection, {
         locAuthorityContext,
         openLibraryContext,
+        hardcoverContext,
       });
     } catch (aiError: any) {
       console.error('❌ AI analysis failed:', aiError.message);
@@ -293,11 +306,31 @@ export async function analyzeBook(req: Request, res: Response, next: NextFunctio
         }
         : undefined,
       openLibraryBook: openLibraryContext?.book ?? undefined,
+      hardcover: hardcoverContext
+        ? {
+          provider: hardcoverContext.provider,
+          mode: hardcoverContext.mode,
+          matchType: hardcoverContext.matchType,
+          confidence: hardcoverContext.confidence,
+          warnings: hardcoverContext.warnings,
+        }
+        : undefined,
+      hardcoverBook: hardcoverContext?.book ?? undefined,
       readingLevel: isAudiobook ? undefined : fleschKincaid ?? undefined,
       gunningFog: isAudiobook ? undefined : gunningFog ?? undefined,
     } as Record<string, unknown>;
 
-    const finalMetadata = mergeOpenLibraryMetadata(baseMetadata, openLibraryContext);
+    const metadataWithHardcoverCandidate = {
+      ...baseMetadata,
+      hardcoverContributionCandidate: buildHardcoverContributionCandidate(
+        baseMetadata,
+        analysis.summary,
+        hardcoverContext,
+      ) ?? undefined,
+    } as Record<string, unknown>;
+
+    const mergedOpenLibraryMetadata = mergeOpenLibraryMetadata(metadataWithHardcoverCandidate, openLibraryContext);
+    const finalMetadata = mergeHardcoverMetadata(mergedOpenLibraryMetadata, hardcoverContext);
 
     const result = {
       metadata: {
@@ -413,7 +446,8 @@ export async function analyzeExtractedText(req: Request, res: Response, next: Ne
     const textHash = crypto.createHash('md5').update(hashInput).digest('hex');
     const locAuthorityFeatureKey = getLocAuthorityFeatureCacheKey();
     const openLibraryFeatureKey = getOpenLibraryFeatureCacheKey();
-    const cacheKey = `text_${textHash}_${locAuthorityFeatureKey}_${openLibraryFeatureKey}`;
+    const hardcoverFeatureKey = getHardcoverFeatureCacheKey();
+    const cacheKey = `text_${textHash}_${locAuthorityFeatureKey}_${openLibraryFeatureKey}_${hardcoverFeatureKey}`;
 
     const cached = analysisCache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
@@ -440,6 +474,13 @@ export async function analyzeExtractedText(req: Request, res: Response, next: Ne
         ? (metadata.identifier as any).value
         : undefined,
     });
+    const hardcoverContext = await buildHardcoverContext({
+      title: typeof metadata.title === 'string' ? metadata.title : undefined,
+      author: typeof metadata.author === 'string' ? metadata.author : undefined,
+      identifier: typeof (metadata.identifier as any)?.value === 'string'
+        ? (metadata.identifier as any).value
+        : undefined,
+    });
 
     const fleschKincaid = isAudiobook ? null : calculateFleschKincaid(text);
     const gunningFog = isAudiobook ? null : calculateGunningFog(text);
@@ -451,6 +492,7 @@ export async function analyzeExtractedText(req: Request, res: Response, next: Ne
       analysis = await generateBookAnalysisWithProvider(text, aiSelection, {
         locAuthorityContext,
         openLibraryContext,
+        hardcoverContext,
       });
     } catch (aiError: any) {
       console.error('❌ AI analysis failed:', aiError.message);
@@ -489,11 +531,31 @@ export async function analyzeExtractedText(req: Request, res: Response, next: Ne
         }
         : undefined,
       openLibraryBook: openLibraryContext?.book ?? undefined,
+      hardcover: hardcoverContext
+        ? {
+          provider: hardcoverContext.provider,
+          mode: hardcoverContext.mode,
+          matchType: hardcoverContext.matchType,
+          confidence: hardcoverContext.confidence,
+          warnings: hardcoverContext.warnings,
+        }
+        : undefined,
+      hardcoverBook: hardcoverContext?.book ?? undefined,
       readingLevel: isAudiobook ? undefined : fleschKincaid ?? undefined,
       gunningFog: isAudiobook ? undefined : gunningFog ?? undefined,
     } as Record<string, unknown>;
 
-    const finalMetadata = mergeOpenLibraryMetadata(baseMetadata, openLibraryContext);
+    const metadataWithHardcoverCandidate = {
+      ...baseMetadata,
+      hardcoverContributionCandidate: buildHardcoverContributionCandidate(
+        baseMetadata,
+        analysis.summary,
+        hardcoverContext,
+      ) ?? undefined,
+    } as Record<string, unknown>;
+
+    const mergedOpenLibraryMetadata = mergeOpenLibraryMetadata(metadataWithHardcoverCandidate, openLibraryContext);
+    const finalMetadata = mergeHardcoverMetadata(mergedOpenLibraryMetadata, hardcoverContext);
 
     const result = {
       metadata: {

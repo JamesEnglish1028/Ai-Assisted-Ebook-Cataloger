@@ -20,7 +20,7 @@
     "start": "NODE_ENV=production node --import tsx/esm server/index.ts",
     "render-build": "npm ci && npm run build && npm run postbuild",
     "postbuild": "echo 'Build completed successfully'",
-    "ci:render-api": "npm run test -- --runInBand tests/textAnalysis.test.ts tests/openLibraryEnrichment.test.ts tests/aiProviderOpenLibraryPrompt.test.ts",
+    "ci:render-api": "npm run test -- --runInBand tests/textAnalysis.test.ts tests/openLibraryEnrichment.test.ts tests/aiProviderOpenLibraryPrompt.test.ts tests/hardcoverEnrichment.test.ts tests/aiProviderHardcoverPrompt.test.ts",
     "ci:render-web": "npm run build",
     "test": "jest",
     "test:watch": "jest --watch",

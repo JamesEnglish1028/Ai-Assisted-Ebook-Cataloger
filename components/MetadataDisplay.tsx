@@ -50,6 +50,33 @@ interface OpenLibraryBook {
   editionKey?: string;
 }
 
+interface HardcoverSummary {
+  provider: string;
+  mode: 'shadow' | 'apply';
+  matchType: 'identifier' | 'title' | 'none';
+  confidence: number;
+  warnings?: string[];
+}
+
+interface HardcoverBook {
+  hardcoverBookId?: number;
+  hardcoverEditionId?: number;
+  title?: string;
+  description?: string;
+  authors?: string[];
+  publishers?: string[];
+  publicationDate?: string;
+  numberOfPages?: number;
+  isbn10?: string[];
+  isbn13?: string[];
+  asin?: string;
+  series?: {
+    name?: string;
+    position?: number;
+  } | null;
+  slug?: string;
+}
+
 export interface FileMetadata {
   title?: string;
   author?: string;
@@ -90,6 +117,10 @@ export interface FileMetadata {
   authorityAlignment?: AuthorityAlignment;
   openLibrary?: OpenLibrarySummary;
   openLibraryBook?: OpenLibraryBook;
+  hardcover?: HardcoverSummary;
+  hardcoverBook?: HardcoverBook;
+  series?: string;
+  seriesPosition?: number;
   // Calculated
   readingLevel?: ReadingLevel;
   gunningFog?: ReadingLevel;
@@ -218,10 +249,10 @@ export const MetadataDisplay: React.FC<MetadataDisplayProps> = ({ metadata, isDa
   }
 
   const isAudiobook = metadata.sourceFormat === 'audiobook';
-  const hasCoreInfo = metadata.title || metadata.author || metadata.narrator || metadata.publisher || metadata.publicationDate || metadata.identifier || metadata.pageCount || metadata.subject || metadata.keywords || metadata.epubVersion || metadata.language || metadata.duration || metadata.audioFormat || metadata.audioTrackCount;
+  const hasCoreInfo = metadata.title || metadata.author || metadata.narrator || metadata.publisher || metadata.publicationDate || metadata.identifier || metadata.pageCount || metadata.subject || metadata.keywords || metadata.epubVersion || metadata.language || metadata.duration || metadata.audioFormat || metadata.audioTrackCount || metadata.series || metadata.seriesPosition;
   // FIX: Coerce truthy/falsy values to actual booleans to match the 'hasContent' prop type of the Section component.
   const hasClassificationInfo = !!(metadata.fieldOfStudy || metadata.discipline || (metadata.lcc && metadata.lcc.length > 0) || (metadata.bisac && metadata.bisac.length > 0) || (metadata.lcsh && metadata.lcsh.length > 0));
-  const hasProvenanceInfo = !!(metadata.locAuthority || metadata.openLibrary || metadata.authorityAlignment);
+  const hasProvenanceInfo = !!(metadata.locAuthority || metadata.openLibrary || metadata.hardcover || metadata.authorityAlignment);
   const hasReadabilityInfo = !isAudiobook && !!(metadata.readingLevel || metadata.gunningFog);
   const hasAccessibilityInfo = !isAudiobook && !!(metadata.certification || (metadata.accessibilityFeatures && metadata.accessibilityFeatures.length > 0) || (metadata.accessModes && metadata.accessModes.length > 0) || (metadata.accessModesSufficient && metadata.accessModesSufficient.length > 0) || (metadata.hazards && metadata.hazards.length > 0));
 
@@ -236,6 +267,8 @@ export const MetadataDisplay: React.FC<MetadataDisplayProps> = ({ metadata, isDa
           {metadata.narrator && <MetadataItem label="Narrator" value={metadata.narrator} isDark={isDark} />}
           {metadata.publisher && <MetadataItem label="Publisher" value={metadata.publisher} isDark={isDark} />}
           {metadata.publicationDate && <MetadataItem label="Publication Date" value={metadata.publicationDate} isDark={isDark} />}
+          {metadata.series && <MetadataItem label="Series" value={metadata.series} isDark={isDark} />}
+          {typeof metadata.seriesPosition === 'number' && <MetadataItem label="Series Position" value={metadata.seriesPosition} isDark={isDark} />}
           {metadata.language && <MetadataItem label="Language" value={metadata.language} isDark={isDark} />}
           {metadata.duration && <MetadataItem label="Duration" value={metadata.duration} isDark={isDark} />}
           {metadata.audioFormat && <MetadataItem label="Audio Format" value={metadata.audioFormat} isDark={isDark} />}
@@ -318,6 +351,34 @@ export const MetadataDisplay: React.FC<MetadataDisplayProps> = ({ metadata, isDa
                   )}
                   {metadata.openLibrary.warnings && metadata.openLibrary.warnings.length > 0 && (
                     <ProvenanceNote text={`Warnings: ${metadata.openLibrary.warnings.join(' | ')}`} isDark={isDark} />
+                  )}
+                </div>
+              }
+              isDark={isDark}
+            />
+          )}
+          {metadata.hardcover && (
+            <MetadataItem
+              label="Hardcover Enrichment"
+              value={
+                <div className="space-y-1">
+                  <p>
+                    Mode: {metadata.hardcover.mode} | Match: {metadata.hardcover.matchType} | Confidence: {metadata.hardcover.confidence.toFixed(2)}
+                  </p>
+                  {metadata.hardcoverBook?.title && (
+                    <ProvenanceNote text={`Matched title: ${metadata.hardcoverBook.title}`} isDark={isDark} />
+                  )}
+                  {metadata.hardcoverBook?.authors && metadata.hardcoverBook.authors.length > 0 && (
+                    <ProvenanceNote text={`Matched authors: ${metadata.hardcoverBook.authors.join(', ')}`} isDark={isDark} />
+                  )}
+                  {metadata.hardcoverBook?.series?.name && (
+                    <ProvenanceNote
+                      text={`Series: ${metadata.hardcoverBook.series.name}${typeof metadata.hardcoverBook.series.position === 'number' ? ` (#${metadata.hardcoverBook.series.position})` : ''}`}
+                      isDark={isDark}
+                    />
+                  )}
+                  {metadata.hardcover.warnings && metadata.hardcover.warnings.length > 0 && (
+                    <ProvenanceNote text={`Warnings: ${metadata.hardcover.warnings.join(' | ')}`} isDark={isDark} />
                   )}
                 </div>
               }

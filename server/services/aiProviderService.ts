@@ -1,6 +1,7 @@
 import { BookAnalysis, generateBookAnalysis as generateGeminiBookAnalysis } from './geminiService';
 import type { LocAuthorityContext } from './locAuthorityService';
 import type { OpenLibraryContext } from './openLibraryService';
+import type { HardcoverContext } from './hardcoverService';
 
 export type AIProvider = 'google' | 'openai' | 'anthropic';
 
@@ -18,6 +19,7 @@ const DEFAULT_MODELS: Record<AIProvider, string> = {
 interface BookAnalysisOptions {
   locAuthorityContext?: LocAuthorityContext | null;
   openLibraryContext?: OpenLibraryContext | null;
+  hardcoverContext?: HardcoverContext | null;
 }
 
 const buildPrompt = (bookText: string, options?: BookAnalysisOptions) => {
@@ -58,6 +60,21 @@ Instructions for Open Library use:
 - In authorityAlignment.notes, mention if Open Library evidence affected classification decisions.
 `
     : '';
+  const hardcoverPromptBlock = options?.hardcoverContext?.book
+    ? `
+Hardcover bibliographic candidate:
+${JSON.stringify({
+  matchType: options.hardcoverContext.matchType,
+  confidence: options.hardcoverContext.confidence,
+  book: options.hardcoverContext.book,
+})}
+
+Instructions for Hardcover use:
+- Use Hardcover evidence to disambiguate title/author/publisher/date and series context when relevant.
+- Treat series and series position as bibliographic hints; prefer file text/content evidence if conflicting.
+- In authorityAlignment.notes, mention if Hardcover evidence affected classification decisions.
+`
+    : '';
 
   return `
 You are an expert librarian with deep knowledge of MARC records cataloging and book classifications using LCC, LCSH, and BISAC classification systems.
@@ -89,6 +106,7 @@ Discipline: Agriculture, Architecture and Design, Business, Education, Engineeri
 Return the result as a single JSON object.
 ${authorityPromptBlock}
 ${openLibraryPromptBlock}
+${hardcoverPromptBlock}
 
 Here is the ebook text:
 ---

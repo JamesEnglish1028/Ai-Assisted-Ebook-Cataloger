@@ -330,6 +330,15 @@ OPEN_LIBRARY_MCP_URL=http://localhost:3003/mcp
 OPEN_LIBRARY_TIMEOUT_MS=3500
 OPEN_LIBRARY_MAX_RESULTS=5
 
+# Optional: Hardcover metadata enrichment via GraphQL API
+ENABLE_HARDCOVER_ENRICHMENT=false
+# Modes: shadow (collect/provenance only) | apply (merge metadata fields)
+HARDCOVER_ENRICHMENT_MODE=shadow
+HARDCOVER_API_URL=https://api.hardcover.app/v1/graphql
+HARDCOVER_API_TOKEN=your_hardcover_api_token_here
+HARDCOVER_TIMEOUT_MS=3500
+HARDCOVER_MAX_RESULTS=5
+
 # Optional: local stdio->HTTP bridge for cataloger-mcp
 LOC_AUTHORITY_BRIDGE_PORT=3002
 LOC_AUTHORITY_BRIDGE_PATH=/mcp
@@ -362,6 +371,10 @@ LOC_AUTHORITY_MCP_URL=http://localhost:3002/mcp
 ENABLE_OPEN_LIBRARY_ENRICHMENT=true
 OPEN_LIBRARY_ENRICHMENT_MODE=shadow
 OPEN_LIBRARY_MCP_URL=http://localhost:3003/mcp
+ENABLE_HARDCOVER_ENRICHMENT=true
+HARDCOVER_ENRICHMENT_MODE=shadow
+HARDCOVER_API_URL=https://api.hardcover.app/v1/graphql
+HARDCOVER_API_TOKEN=your_hardcover_api_token_here
 ```
 
 Get your Gemini API key from: https://aistudio.google.com/app/apikey

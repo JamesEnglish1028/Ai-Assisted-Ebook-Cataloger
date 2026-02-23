@@ -199,6 +199,12 @@ Ai-Assisted-Ebook-Cataloger/
 | `ENABLE_OPEN_LIBRARY_ENRICHMENT` | Enable Open Library metadata enrichment | No |
 | `OPEN_LIBRARY_ENRICHMENT_MODE` | `shadow` or `apply` | No |
 | `OPEN_LIBRARY_MCP_URL` | HTTP MCP endpoint for Open Library service | No |
+| `ENABLE_HARDCOVER_ENRICHMENT` | Enable Hardcover metadata enrichment | No |
+| `HARDCOVER_ENRICHMENT_MODE` | `shadow` or `apply` | No |
+| `HARDCOVER_API_URL` | Hardcover GraphQL endpoint (default: `https://api.hardcover.app/v1/graphql`) | No |
+| `HARDCOVER_API_TOKEN` | Hardcover API token (server-side only) | No |
+| `HARDCOVER_TIMEOUT_MS` | Hardcover API timeout in milliseconds | No |
+| `HARDCOVER_MAX_RESULTS` | Hardcover candidate limit (1-10) | No |
 
 ## Development & Testing
 
@@ -267,6 +273,8 @@ If you want MCP enrichment in production, also add two additional **Web Services
 1. `ai-ebook-cataloger-loc-bridge` (LOC MCP bridge)
 2. `ai-ebook-cataloger-openlib-bridge` (Open Library MCP bridge)
 
+Hardcover enrichment does **not** require a separate Render service. It runs inside the API service and only needs API environment variables.
+
 #### API service (`ai-ebook-cataloger-api`)
 
 Set/verify these values in Render:
@@ -294,6 +302,15 @@ Set/verify these values in Render:
    - `OPEN_LIBRARY_MCP_URL=https://<your-openlib-bridge>.onrender.com/mcp`
    - `OPEN_LIBRARY_TIMEOUT_MS=3500`
    - `OPEN_LIBRARY_MAX_RESULTS=5`
+   - `ENABLE_HARDCOVER_ENRICHMENT=true`
+   - `HARDCOVER_ENRICHMENT_MODE=shadow` (recommended rollout start)
+   - `HARDCOVER_API_URL=https://api.hardcover.app/v1/graphql`
+   - `HARDCOVER_API_TOKEN=<your-hardcover-token>`
+   - `HARDCOVER_TIMEOUT_MS=3500`
+   - `HARDCOVER_MAX_RESULTS=5`
+
+   If you are not enabling Hardcover immediately, set:
+   - `ENABLE_HARDCOVER_ENRICHMENT=false`
 
 #### Frontend static site (`ai-ebook-cataloger-web`)
 
@@ -343,6 +360,9 @@ Create another Render **Web Service** from the same repo:
 4. In the API response metadata, verify provenance fields:
    - `locAuthority`
    - `openLibrary`
+   - `hardcover`
+   - `hardcoverBook`
+   - `hardcoverContributionCandidate`
    - `authorityAlignment`
 5. If browser calls fail, verify `ALLOWED_ORIGINS` includes your static site URL.
 
