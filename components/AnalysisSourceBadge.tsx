@@ -12,20 +12,20 @@ interface AnalysisSourceBadgeProps {
 const getProviderMeta = (provider?: AIProvider): { label: string; short: string; bg: string; text: string } => {
   const key = (provider || '').toLowerCase();
   if (key === 'openai') {
-    return { label: 'OpenAI', short: 'O', bg: 'bg-emerald-100', text: 'text-emerald-800' };
+    return { label: 'OpenAI', short: 'O', bg: 'bg-amber-200', text: 'text-amber-900' };
   }
   if (key === 'anthropic' || key === 'claude') {
-    return { label: 'Anthropic', short: 'A', bg: 'bg-amber-100', text: 'text-amber-800' };
+    return { label: 'Anthropic', short: 'A', bg: 'bg-amber-200', text: 'text-amber-900' };
   }
-  return { label: 'Google', short: 'G', bg: 'bg-blue-100', text: 'text-blue-800' };
+  return { label: 'Google', short: 'G', bg: 'bg-amber-200', text: 'text-amber-900' };
 };
 
 export const AnalysisSourceBadge: React.FC<AnalysisSourceBadgeProps> = ({ source, aiProvider, aiModel, isDark }) => {
   if (source === 'system') {
     return (
       <span
-        className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
-          isDark ? 'border-slate-600 bg-slate-800 text-slate-200' : 'border-slate-300 bg-slate-100 text-slate-700'
+        className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-bold ${
+          isDark ? 'border-green-500/50 bg-green-900/40 text-green-100' : 'border-green-300 bg-green-100 text-green-900'
         }`}
         title="Extracted from the file and/or calculated in code"
       >
@@ -43,8 +43,8 @@ export const AnalysisSourceBadge: React.FC<AnalysisSourceBadgeProps> = ({ source
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
-        isDark ? 'border-slate-600 bg-slate-800 text-slate-100' : 'border-slate-300 bg-slate-100 text-slate-700'
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-bold ${
+        isDark ? 'border-amber-500/50 bg-amber-900/40 text-amber-100' : 'border-amber-300 bg-amber-100 text-amber-900'
       }`}
       title={title}
     >
