@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
+import { AnalysisSourceBadge } from './AnalysisSourceBadge';
 
 interface SummaryDisplayProps {
   summary: string;
   coverImageUrl: string | null;
   isDark: boolean;
+  aiProvider?: 'google' | 'openai' | 'anthropic' | string;
+  aiModel?: string;
 }
 
-export const SummaryDisplay: React.FC<SummaryDisplayProps> = ({ summary, coverImageUrl, isDark }) => {
+export const SummaryDisplay: React.FC<SummaryDisplayProps> = ({ summary, coverImageUrl, isDark, aiProvider, aiModel }) => {
   const [isCopied, setIsCopied] = useState(false);
 
   const handleCopy = async () => {
@@ -36,7 +39,10 @@ export const SummaryDisplay: React.FC<SummaryDisplayProps> = ({ summary, coverIm
         )}
 
         <div className="w-full text-left">
-          <h3 className="text-sm font-bold text-slate-700 uppercase tracking-widest mb-2">Summary</h3>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <h3 className="text-sm font-bold text-slate-700 uppercase tracking-widest">Summary</h3>
+            <AnalysisSourceBadge source="ai" aiProvider={aiProvider} aiModel={aiModel} isDark={isDark} />
+          </div>
           <div className={`prose max-w-none space-y-4 ${isDark ? 'text-slate-300 prose-invert' : 'text-slate-700'}`}>
             {summary.split('\n').map((paragraph, index) => (
               paragraph.trim() && <p key={index}>{paragraph}</p>

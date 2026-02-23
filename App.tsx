@@ -134,6 +134,8 @@ export default function App() {
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
   const [metadata, setMetadata] = useState<FileMetadata | null>(null);
+  const [analysisAiProvider, setAnalysisAiProvider] = useState<AIProvider | null>(null);
+  const [analysisAiModel, setAnalysisAiModel] = useState<string | null>(null);
   const [tableOfContents, setTableOfContents] = useState<TocItem[] | null>(null);
   const [pageList, setPageList] = useState<PageListItem[] | null>(null);
   const [audioTranscriptionTelemetry, setAudioTranscriptionTelemetry] = useState<AudioTranscriptionTelemetry>(null);
@@ -331,6 +333,8 @@ export default function App() {
       setSummary('');
       setCoverImageUrl(null);
       setMetadata(null);
+      setAnalysisAiProvider(null);
+      setAnalysisAiModel(null);
       setTableOfContents(null);
       setPageList(null);
       setAudioTranscriptionTelemetry(null);
@@ -368,6 +372,8 @@ export default function App() {
             setSummary('');
             setCoverImageUrl(null);
             setMetadata(null);
+            setAnalysisAiProvider(null);
+            setAnalysisAiModel(null);
             setTableOfContents(null);
             setPageList(null);
             setAudioTranscriptionTelemetry(null);
@@ -919,6 +925,8 @@ export default function App() {
     setErrorMessage('');
     setCoverImageUrl(null);
     setMetadata(null);
+    setAnalysisAiProvider(null);
+    setAnalysisAiModel(null);
     setTableOfContents(null);
     setPageList(null);
     setAudioTranscriptionTelemetry(null);
@@ -1109,6 +1117,8 @@ export default function App() {
       
       setSummary(result.summary);
       setMetadata(result.metadata);
+      setAnalysisAiProvider(typeof result.aiProvider === 'string' ? result.aiProvider : aiProvider);
+      setAnalysisAiModel(typeof result.aiModel === 'string' ? result.aiModel : aiModel);
       setTableOfContents(result.tableOfContents ?? null);
       setPageList(result.pageList ?? null);
       setAudioTranscriptionTelemetry(result.transcription ?? null);
@@ -1432,7 +1442,12 @@ export default function App() {
                   Cancel Conversion
                 </button>
               )}
-              <MetadataDisplay metadata={metadata} isDark={isDark} />
+              <MetadataDisplay
+                metadata={metadata}
+                isDark={isDark}
+                aiProvider={analysisAiProvider ?? undefined}
+                aiModel={analysisAiModel ?? undefined}
+              />
               {audioTranscriptionTelemetry && (
                 <div className="w-full mt-4 p-4 rounded-xl border border-blue-100 bg-blue-50">
                   <h3 className="text-sm font-bold text-blue-900 uppercase tracking-widest mb-2">Audio Processing</h3>
@@ -1473,7 +1488,15 @@ export default function App() {
                   />
                 )}
                 {!isLoading && status === 'error' && <ErrorMessage message={errorMessage} isDark={isDark} />}
-                {!isLoading && status === 'success' && <SummaryDisplay summary={summary} coverImageUrl={coverImageUrl} isDark={isDark} />}
+                {!isLoading && status === 'success' && (
+                  <SummaryDisplay
+                    summary={summary}
+                    coverImageUrl={coverImageUrl}
+                    isDark={isDark}
+                    aiProvider={analysisAiProvider ?? undefined}
+                    aiModel={analysisAiModel ?? undefined}
+                  />
+                )}
                 {!isLoading && (status === 'idle' && !errorMessage) && (
                   <div className="text-center text-slate-500">
                     <p className="text-base font-medium">Your generated analysis will appear here.</p>

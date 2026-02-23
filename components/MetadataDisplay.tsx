@@ -1,5 +1,6 @@
 import React from 'react';
 import { accessibilityMappings } from '../utils/accessibilityMappings';
+import { AnalysisSourceBadge } from './AnalysisSourceBadge';
 
 interface ReadingLevel {
   score: number;
@@ -129,14 +130,25 @@ export interface FileMetadata {
 interface MetadataDisplayProps {
   metadata: FileMetadata | null;
   isDark: boolean;
+  aiProvider?: 'google' | 'openai' | 'anthropic' | string;
+  aiModel?: string;
 }
 
-const Section: React.FC<{ title: string; children: React.ReactNode; hasContent?: boolean; isDark: boolean }> = ({ title, children, hasContent = true, isDark }) => {
+const Section: React.FC<{
+  title: string;
+  children: React.ReactNode;
+  hasContent?: boolean;
+  isDark: boolean;
+  headerBadge?: React.ReactNode;
+}> = ({ title, children, hasContent = true, isDark, headerBadge }) => {
   if (!hasContent) return null;
 
   return (
     <div className={`mt-6 pt-4 border-t ${isDark ? 'border-slate-700' : 'border-slate-200'}`}>
-      <h4 className={`text-base font-semibold mb-3 ${isDark ? 'text-cyan-400' : 'text-cyan-600'}`}>{title}</h4>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h4 className={`text-base font-semibold ${isDark ? 'text-cyan-400' : 'text-cyan-600'}`}>{title}</h4>
+        {headerBadge}
+      </div>
       {children}
     </div>
   );
@@ -243,7 +255,7 @@ const ProvenanceNote: React.FC<{ text: string; isDark: boolean }> = ({ text, isD
 );
 
 
-export const MetadataDisplay: React.FC<MetadataDisplayProps> = ({ metadata, isDark }) => {
+export const MetadataDisplay: React.FC<MetadataDisplayProps> = ({ metadata, isDark, aiProvider, aiModel }) => {
   if (!metadata || Object.values(metadata).every(v => !v || (Array.isArray(v) && v.length === 0))) {
     return null;
   }
@@ -258,7 +270,10 @@ export const MetadataDisplay: React.FC<MetadataDisplayProps> = ({ metadata, isDa
 
   return (
     <div className="w-full mt-6 p-4 rounded-xl border border-slate-200 bg-white animate-fade-in">
-      <h3 className="text-sm font-bold text-slate-700 uppercase tracking-widest mb-3">Publication Details</h3>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h3 className="text-sm font-bold text-slate-700 uppercase tracking-widest">Publication Details</h3>
+        <AnalysisSourceBadge source="system" isDark={isDark} />
+      </div>
       
       {hasCoreInfo && (
         <dl className="space-y-4">
@@ -307,7 +322,12 @@ export const MetadataDisplay: React.FC<MetadataDisplayProps> = ({ metadata, isDa
         </dl>
       )}
 
-      <Section title="Classification" hasContent={hasClassificationInfo} isDark={isDark}>
+      <Section
+        title="Classification"
+        hasContent={hasClassificationInfo}
+        isDark={isDark}
+        headerBadge={<AnalysisSourceBadge source="ai" aiProvider={aiProvider} aiModel={aiModel} isDark={isDark} />}
+      >
         <dl className="space-y-4">
           {metadata.fieldOfStudy && <MetadataItem label="Field of Study" value={metadata.fieldOfStudy} isDark={isDark} />}
           {metadata.discipline && <MetadataItem label="Discipline" value={metadata.discipline} isDark={isDark} />}
@@ -317,7 +337,12 @@ export const MetadataDisplay: React.FC<MetadataDisplayProps> = ({ metadata, isDa
         </dl>
       </Section>
 
-      <Section title="Catalog Provenance" hasContent={hasProvenanceInfo} isDark={isDark}>
+      <Section
+        title="Catalog Provenance"
+        hasContent={hasProvenanceInfo}
+        isDark={isDark}
+        headerBadge={<AnalysisSourceBadge source="system" isDark={isDark} />}
+      >
         <dl className="space-y-4">
           {metadata.locAuthority && (
             <MetadataItem
@@ -413,14 +438,24 @@ export const MetadataDisplay: React.FC<MetadataDisplayProps> = ({ metadata, isDa
         </dl>
       </Section>
       
-      <Section title="Readability Analysis" hasContent={hasReadabilityInfo} isDark={isDark}>
+      <Section
+        title="Readability Analysis"
+        hasContent={hasReadabilityInfo}
+        isDark={isDark}
+        headerBadge={<AnalysisSourceBadge source="system" isDark={isDark} />}
+      >
         <dl className="space-y-4">
           {metadata.readingLevel && <MetadataItem label="Readability (Flesch-Kincaid)" value={`${metadata.readingLevel.level} (Score: ${metadata.readingLevel.score.toFixed(1)})`} isDark={isDark} />}
           {metadata.gunningFog && <MetadataItem label="Readability (Gunning FOG)" value={`${metadata.gunningFog.level} (Score: ${metadata.gunningFog.score.toFixed(1)})`} isDark={isDark} />}
         </dl>
       </Section>
 
-      <Section title="Accessibility Details" hasContent={hasAccessibilityInfo} isDark={isDark}>
+      <Section
+        title="Accessibility Details"
+        hasContent={hasAccessibilityInfo}
+        isDark={isDark}
+        headerBadge={<AnalysisSourceBadge source="system" isDark={isDark} />}
+      >
         <dl className="space-y-4">
           {metadata.certification && <MetadataItem label={accessibilityMappings.properties.certification || 'Certification'} value={metadata.certification} isDark={isDark} />}
           {metadata.accessibilityFeatures && metadata.accessibilityFeatures.length > 0 && <AccessibilityListItem property="accessibilityFeatures" values={metadata.accessibilityFeatures} isDark={isDark} />}
