@@ -41,6 +41,13 @@ interface McpResultEnvelope {
   structuredContent?: unknown;
 }
 
+class LocServiceUnavailableError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'LocServiceUnavailableError';
+  }
+}
+
 const ENABLE_FLAG = 'ENABLE_LOC_AUTHORITY_ENRICHMENT';
 const MODE_KEY = 'LOC_AUTHORITY_MODE';
 const MCP_URL_KEY = 'LOC_AUTHORITY_MCP_URL';
@@ -304,6 +311,8 @@ const toStringList = (value: unknown): string[] => {
             (typeof record.heading === 'string' && record.heading) ||
             (typeof record.subject === 'string' && record.subject) ||
             (typeof record.name === 'string' && record.name) ||
+            (typeof record.full_name === 'string' && record.full_name) ||
+            (typeof record.contributor === 'string' && record.contributor) ||
             (typeof record.label === 'string' && record.label) ||
             '';
           return text.trim();
@@ -379,6 +388,9 @@ const fetchJsonWithTimeout = async (url: string, timeoutMs: number): Promise<unk
     const response = await fetch(url, { signal: controller.signal });
     if (!response.ok) {
       const detail = await response.text();
+      if (response.status === 503) {
+        throw new LocServiceUnavailableError(`HTTP 503: ${detail}`);
+      }
       throw new Error(`HTTP ${response.status}: ${detail}`);
     }
     const contentType = response.headers.get('content-type') || '';
@@ -419,15 +431,80 @@ const extractLocItems = (payload: unknown): Record<string, unknown>[] => {
   return rawResults.filter((item): item is Record<string, unknown> => !!item && typeof item === 'object');
 };
 
+const tokenize = (value: string | undefined): string[] => {
+  if (!value) return [];
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 3);
+};
+
+const scoreItemRelevance = (
+  item: Record<string, unknown>,
+  input: LocAuthorityInput,
+): number => {
+  const titleTokens = tokenize(input.title);
+  const authorTokens = tokenize(input.author);
+
+  const candidateText = [
+    ...toStringList(item.title),
+    ...toStringList(item.other_title),
+    ...toStringList(item.contributors),
+    ...toStringList(item.contributor_names),
+    ...toStringList(item.creator),
+    ...toStringList(item.authors),
+    ...toStringList(item.subject_headings),
+  ]
+    .join(' ')
+    .toLowerCase();
+
+  let score = 0;
+
+  for (const token of titleTokens) {
+    if (candidateText.includes(token)) score += 3;
+  }
+  for (const token of authorTokens) {
+    if (candidateText.includes(token)) score += 2;
+  }
+
+  const formats = [
+    ...toStringList(item.original_format),
+    ...toStringList(item.format),
+    ...toStringList(item.type),
+  ]
+    .join(' ')
+    .toLowerCase();
+
+  if (formats.includes('book')) score += 2;
+  if (formats.includes('manuscript') || formats.includes('photo') || formats.includes('newspaper')) score -= 2;
+
+  return score;
+};
+
+const rankItems = (items: Record<string, unknown>[], input: LocAuthorityInput): Record<string, unknown>[] => {
+  return [...items]
+    .map((item) => ({ item, score: scoreItemRelevance(item, input) }))
+    .sort((a, b) => b.score - a.score)
+    .map((entry) => entry.item);
+};
+
 const mapLocItemsToCandidates = (
   items: Record<string, unknown>[],
   query: string,
+  input: LocAuthorityInput,
 ): { headings: LocAuthorityHeadingCandidate[]; names: LocAuthorityNameCandidate[]; detailUrls: string[] } => {
   const headings: LocAuthorityHeadingCandidate[] = [];
   const names: LocAuthorityNameCandidate[] = [];
   const detailUrls: string[] = [];
 
-  for (const item of items) {
+  const rankedItems = rankItems(items, input);
+  for (const item of rankedItems) {
+    if (scoreItemRelevance(item, input) < 2) {
+      // Skip weak or noisy hits in direct mode.
+      continue;
+    }
     const itemUrl = normalizeLocUrl(typeof item.url === 'string' ? item.url : undefined);
     const isLikelyItem = isLikelyLocItemUrl(itemUrl);
     if (isLikelyItem && itemUrl) detailUrls.push(itemUrl);
@@ -444,6 +521,7 @@ const mapLocItemsToCandidates = (
 
     const rawNames = [
       ...toStringList(item.contributors),
+      ...toStringList(item.contributor_names),
       ...toStringList(item.creator),
       ...toStringList(item.creators),
       ...toStringList(item.author),
@@ -560,7 +638,7 @@ const buildViaDirect = async (
           timeoutMs,
         );
         const items = extractLocItems(searchPayload);
-        const mapped = mapLocItemsToCandidates(items, query);
+        const mapped = mapLocItemsToCandidates(items, query, input);
         if (mapped.headings.length > 0 || mapped.names.length > 0 || mapped.detailUrls.length > 0) {
           phaseProducedCandidates = true;
         }
@@ -568,7 +646,10 @@ const buildViaDirect = async (
         mapped.names.forEach((candidate) => names.push(candidate));
         mapped.detailUrls.forEach((url) => detailUrls.add(url));
       } catch (error: any) {
-        warnings.push(`direct LOC search failed for "${query}": ${error?.message || 'unknown error'}`);
+        const message = error?.message || 'unknown error';
+        if (!(error instanceof LocServiceUnavailableError)) {
+          warnings.push(`direct LOC search failed for "${query}": ${message}`);
+        }
       }
     }
     return phaseProducedCandidates;
@@ -599,7 +680,7 @@ const buildViaDirect = async (
     ]);
   }
 
-  const detailTargets = Array.from(detailUrls).slice(0, 3);
+  const detailTargets = Array.from(detailUrls).slice(0, 2);
   await Promise.all(
     detailTargets.map(async (detailUrl) => {
       try {
@@ -608,14 +689,21 @@ const buildViaDirect = async (
           timeoutMs,
         );
         const detailItems = extractLocItems(detailPayload);
-        const mapped = mapLocItemsToCandidates(detailItems, detailUrl);
+        const mapped = mapLocItemsToCandidates(detailItems, detailUrl, input);
         mapped.headings.forEach((candidate) => headings.push(candidate));
         mapped.names.forEach((candidate) => names.push(candidate));
       } catch (error: any) {
-        warnings.push(`direct LOC detail lookup failed for "${detailUrl}": ${error?.message || 'unknown error'}`);
+        const message = error?.message || 'unknown error';
+        if (!(error instanceof LocServiceUnavailableError)) {
+          warnings.push(`direct LOC detail lookup failed for "${detailUrl}": ${message}`);
+        }
       }
     }),
   );
+
+  if (headings.length === 0 && names.length === 0 && warnings.length === 0) {
+    warnings.push('No relevant LOC authority candidates found from current metadata queries.');
+  }
 
   return {
     provider: 'loc-gov-direct',
