@@ -78,6 +78,7 @@ describe('LOC authority service', () => {
     expect(context?.provider).toBe('loc-gov-direct');
     expect(context?.lcshCandidates.length).toBeGreaterThan(0);
     expect(context?.nameCandidates.length).toBeGreaterThan(0);
+    expect(context?.nameCandidates.some((candidate) => candidate.label === 'Arthur Conan Doyle')).toBe(true);
     expect(context?.warnings.length).toBe(0);
     expect(fetchMock).toHaveBeenCalled();
     const firstUrl = String(fetchMock.mock.calls[0][0]);
@@ -156,5 +157,35 @@ describe('LOC authority service', () => {
     expect(firstUrl).toContain('q=The+Adventures+of+Sherlock+Holmes');
     expect(context?.lcshCandidates.length).toBeGreaterThan(0);
     expect(context?.warnings.length).toBe(0);
+  });
+
+  it('normalizes direct LOC names in last-first format', async () => {
+    process.env.ENABLE_LOC_AUTHORITY_ENRICHMENT = 'true';
+    process.env.LOC_AUTHORITY_MODE = 'direct';
+    process.env.LOC_DIRECT_SEARCH_URL = 'https://www.loc.gov/search/';
+
+    const fetchMock = jest.fn().mockResolvedValue(
+      makeJsonResponse({
+        results: [
+          {
+            title: 'A Study in Scarlet',
+            url: 'https://www.loc.gov/item/111',
+            subject_headings: ['Detective and mystery stories, English'],
+            contributors: ['Doyle, Arthur Conan, 1859-1930'],
+            contributor_names: ['Conan Doyle, Arthur, 1859-1930'],
+          },
+        ],
+      }),
+    );
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const context = await buildLocAuthorityContext({
+      title: 'A Study in Scarlet',
+      author: 'Arthur Conan Doyle',
+    });
+
+    const labels = context?.nameCandidates.map((candidate) => candidate.label) || [];
+    expect(labels).toContain('Arthur Conan Doyle');
+    expect(labels).not.toContain('Doyle, Arthur Conan, 1859-1930');
   });
 });

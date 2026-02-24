@@ -299,6 +299,43 @@ const toUniqueArray = (items: string[]): string[] => {
   return Array.from(new Map(items.map((item) => [item.toLowerCase(), item])).values());
 };
 
+const normalizeNameWhitespace = (value: string): string => value.replace(/\s+/g, ' ').trim();
+
+const sanitizeNamePart = (value: string): string =>
+  normalizeNameWhitespace(
+    value
+      .replace(/\(.*?\)/g, ' ')
+      .replace(/\b\d{3,4}(-\d{2,4})?\b/g, ' ')
+      .replace(/[.,;:/]+$/g, ''),
+  );
+
+const normalizePersonalName = (value: string): string => {
+  const cleaned = sanitizeNamePart(value);
+  if (!cleaned) return '';
+
+  const segments = cleaned
+    .split(',')
+    .map((segment) => sanitizeNamePart(segment))
+    .filter(Boolean);
+
+  // LOC often returns names as "Last, First Middle, dates".
+  if (segments.length >= 2) {
+    const surname = segments[0];
+    const given = segments.slice(1).join(' ');
+    const reordered = normalizeNameWhitespace(`${given} ${surname}`);
+    return reordered || cleaned;
+  }
+
+  return cleaned;
+};
+
+const looksLikeNameCandidate = (value: string): boolean => {
+  const text = value.trim();
+  if (text.length < 3 || text.length > 140) return false;
+  if (!/[a-z]/i.test(text)) return false;
+  return !/^https?:\/\//i.test(text);
+};
+
 const toStringList = (value: unknown): string[] => {
   if (!value) return [];
   if (Array.isArray(value)) {
@@ -312,7 +349,12 @@ const toStringList = (value: unknown): string[] => {
             (typeof record.subject === 'string' && record.subject) ||
             (typeof record.name === 'string' && record.name) ||
             (typeof record.full_name === 'string' && record.full_name) ||
+            (typeof record.fullName === 'string' && record.fullName) ||
             (typeof record.contributor === 'string' && record.contributor) ||
+            (typeof record.contributor_name === 'string' && record.contributor_name) ||
+            (typeof record.contributorName === 'string' && record.contributorName) ||
+            (typeof record.creator === 'string' && record.creator) ||
+            (typeof record.author === 'string' && record.author) ||
             (typeof record.label === 'string' && record.label) ||
             '';
           return text.trim();
@@ -522,13 +564,22 @@ const mapLocItemsToCandidates = (
     const rawNames = [
       ...toStringList(item.contributors),
       ...toStringList(item.contributor_names),
+      ...toStringList(item.contributor_name),
       ...toStringList(item.creator),
       ...toStringList(item.creators),
       ...toStringList(item.author),
       ...toStringList(item.authors),
       ...toStringList(item.name),
+      ...toStringList(item.names),
+      ...toStringList(item.byline),
+      ...toStringList(item.partof),
     ];
-    for (const label of rawNames) {
+    const normalizedNames = toUniqueArray(
+      rawNames
+        .map((entry) => normalizePersonalName(entry))
+        .filter((entry) => looksLikeNameCandidate(entry)),
+    );
+    for (const label of normalizedNames) {
       if (isNameNoise(label)) continue;
       names.push({
         label,
