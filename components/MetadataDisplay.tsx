@@ -23,6 +23,10 @@ interface LocAuthoritySummary {
   provider: string;
   lcshCandidateCount: number;
   nameCandidateCount: number;
+  itemLink?: {
+    itemId: string;
+    itemUrl: string;
+  };
   recordLinks?: {
     lccn: string;
     permalinkUrl: string;
@@ -359,6 +363,23 @@ export const MetadataDisplay: React.FC<MetadataDisplayProps> = ({ metadata, isDa
                   <p>
                     {metadata.locAuthority.lcshCandidateCount} subject candidates, {metadata.locAuthority.nameCandidateCount} name candidates.
                   </p>
+                  {metadata.locAuthority.itemLink && (
+                    <div className="space-y-1">
+                      <ProvenanceNote text={`LOC Item ID: ${metadata.locAuthority.itemLink.itemId}`} isDark={isDark} />
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        <a
+                          href={metadata.locAuthority.itemLink.itemUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={`inline-flex items-center rounded px-2 py-1 text-xs font-medium ${
+                            isDark ? 'bg-cyan-900 text-cyan-200 hover:bg-cyan-800' : 'bg-cyan-100 text-cyan-700 hover:bg-cyan-200'
+                          }`}
+                        >
+                          LOC Item
+                        </a>
+                      </div>
+                    </div>
+                  )}
                   {metadata.locAuthority.recordLinks && (
                     <div className="space-y-1">
                       <ProvenanceNote text={`LCCN: ${metadata.locAuthority.recordLinks.lccn}`} isDark={isDark} />

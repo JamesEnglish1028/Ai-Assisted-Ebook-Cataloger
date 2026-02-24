@@ -19,6 +19,7 @@ export interface LocAuthorityContext {
   enabled: boolean;
   lcshCandidates: LocAuthorityHeadingCandidate[];
   nameCandidates: LocAuthorityNameCandidate[];
+  itemLink?: LocAuthorityItemLink;
   recordLinks?: LocAuthorityRecordLinks;
   warnings: string[];
 }
@@ -38,6 +39,11 @@ export interface LocAuthorityRecordLinks {
   marcXmlUrl: string;
   modsUrl: string;
   bibframe2Url: string;
+}
+
+export interface LocAuthorityItemLink {
+  itemId: string;
+  itemUrl: string;
 }
 
 interface McpTextContent {
@@ -465,6 +471,17 @@ const buildRecordLinksFromLccn = (lccn: string): LocAuthorityRecordLinks => {
   };
 };
 
+const extractLocItemId = (itemUrl: string | undefined): string | null => {
+  if (!itemUrl) return null;
+  try {
+    const parsed = new URL(itemUrl);
+    const match = parsed.pathname.match(/\/item\/([^/]+)/i);
+    return match?.[1] || null;
+  } catch {
+    return null;
+  }
+};
+
 const extractLccnCandidates = (item: Record<string, unknown>): string[] => {
   const candidates: string[] = [];
   const addRaw = (raw: unknown) => {
@@ -476,6 +493,10 @@ const extractLccnCandidates = (item: Record<string, unknown>): string[] => {
 
   addRaw(item.lccn);
   addRaw(item.lccns);
+  addRaw(item.control_number);
+  addRaw(item.control_numbers);
+  addRaw(item.library_of_congress_control_number);
+  addRaw(item.number_lccn);
   addRaw(item.identifier_lccn);
   addRaw(item.lccn_url);
   addRaw(item.lccn_permalink);
@@ -755,6 +776,7 @@ const buildViaDirect = async (
   const names: LocAuthorityNameCandidate[] = [];
   const detailUrls = new Set<string>();
   const lccns = new Set<string>();
+  let primaryItemUrl: string | undefined;
 
   const identifier = sanitizeIdentifier(input.identifier);
   const runSearchPhase = async (queries: string[]): Promise<boolean> => {
@@ -775,7 +797,10 @@ const buildViaDirect = async (
         }
         mapped.headings.forEach((candidate) => headings.push(candidate));
         mapped.names.forEach((candidate) => names.push(candidate));
-        mapped.detailUrls.forEach((url) => detailUrls.add(url));
+        mapped.detailUrls.forEach((url) => {
+          detailUrls.add(url);
+          if (!primaryItemUrl) primaryItemUrl = url;
+        });
         mapped.lccns.forEach((value) => lccns.add(value));
       } catch (error: any) {
         const message = error?.message || 'unknown error';
@@ -838,11 +863,13 @@ const buildViaDirect = async (
     warnings.push('No relevant LOC authority candidates found from current metadata queries.');
   }
 
+  const itemId = extractLocItemId(primaryItemUrl);
   return {
     provider: 'loc-gov-direct',
     enabled: true,
     lcshCandidates: dedupeHeadings(headings).slice(0, 20),
     nameCandidates: dedupeNames(names).slice(0, 10),
+    itemLink: primaryItemUrl && itemId ? { itemUrl: primaryItemUrl, itemId } : undefined,
     recordLinks: Array.from(lccns)[0] ? buildRecordLinksFromLccn(Array.from(lccns)[0]) : undefined,
     warnings,
   };

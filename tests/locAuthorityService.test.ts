@@ -80,6 +80,8 @@ describe('LOC authority service', () => {
     expect(context?.lcshCandidates.length).toBeGreaterThan(0);
     expect(context?.nameCandidates.length).toBeGreaterThan(0);
     expect(context?.nameCandidates.some((candidate) => candidate.label === 'Arthur Conan Doyle')).toBe(true);
+    expect(context?.itemLink?.itemId).toBe('123');
+    expect(context?.itemLink?.itemUrl).toBe('https://www.loc.gov/item/123');
     expect(context?.recordLinks?.lccn).toBe('2003556443');
     expect(context?.recordLinks?.marcXmlUrl).toBe('https://lccn.loc.gov/2003556443/marcxml');
     expect(context?.recordLinks?.modsUrl).toBe('https://lccn.loc.gov/2003556443/mods');
@@ -192,5 +194,34 @@ describe('LOC authority service', () => {
     const labels = context?.nameCandidates.map((candidate) => candidate.label) || [];
     expect(labels).toContain('Arthur Conan Doyle');
     expect(labels).not.toContain('Doyle, Arthur Conan, 1859-1930');
+  });
+
+  it('returns LOC item link even when no LCCN is present', async () => {
+    process.env.ENABLE_LOC_AUTHORITY_ENRICHMENT = 'true';
+    process.env.LOC_AUTHORITY_MODE = 'direct';
+    process.env.LOC_DIRECT_SEARCH_URL = 'https://www.loc.gov/search/';
+
+    const fetchMock = jest.fn().mockResolvedValue(
+      makeJsonResponse({
+        results: [
+          {
+            title: 'The Adventures of Sherlock Holmes',
+            url: 'https://www.loc.gov/item/55555/',
+            subject_headings: ['Detective and mystery stories, English'],
+            contributors: ['Doyle, Arthur Conan, 1859-1930'],
+          },
+        ],
+      }),
+    );
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const context = await buildLocAuthorityContext({
+      title: 'The Adventures of Sherlock Holmes',
+      author: 'Arthur Conan Doyle',
+    });
+
+    expect(context?.itemLink?.itemId).toBe('55555');
+    expect(context?.itemLink?.itemUrl).toBe('https://www.loc.gov/item/55555/');
+    expect(context?.recordLinks).toBeUndefined();
   });
 });
