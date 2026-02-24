@@ -200,16 +200,29 @@ const normalizeHeadingForMatch = (value: string): string => {
 const LcshDisplay: React.FC<{
   headings: string[];
   authorityCandidates?: LocAuthorityHeadingCandidate[];
+  usedAuthorityHeadings?: string[];
   isDark: boolean;
-}> = ({ headings, authorityCandidates, isDark }) => {
+}> = ({ headings, authorityCandidates, usedAuthorityHeadings, isDark }) => {
   if (!headings || headings.length === 0) return null;
 
-  const authoritySet = new Set(
-    (authorityCandidates || [])
+  const authorityMatchPool = [
+    ...(authorityCandidates || [])
       .map((candidate) => (candidate.heading || candidate.label || '').trim())
       .filter((value) => value.length > 0)
       .map(normalizeHeadingForMatch),
-  );
+    ...((usedAuthorityHeadings || []).map(normalizeHeadingForMatch)),
+  ].filter(Boolean);
+
+  const isAuthorityHeadingMatch = (heading: string): boolean => {
+    const normalizedHeading = normalizeHeadingForMatch(heading);
+    if (!normalizedHeading) return false;
+
+    return authorityMatchPool.some((candidate) => (
+      candidate === normalizedHeading
+      || candidate.includes(normalizedHeading)
+      || normalizedHeading.includes(candidate)
+    ));
+  };
 
   return (
     <div>
@@ -217,9 +230,9 @@ const LcshDisplay: React.FC<{
       <dd className={`mt-1 text-sm ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
         <ul className="list-disc list-inside space-y-1">
           {headings.map((heading, index) => {
-            const isAuthorityMatch = authoritySet.has(normalizeHeadingForMatch(heading));
+            const isAuthorityMatch = isAuthorityHeadingMatch(heading);
             return (
-              <li key={`${heading}-${index}`} className={isAuthorityMatch ? 'font-semibold' : undefined}>
+              <li key={`${heading}-${index}`} className={isAuthorityMatch ? (isDark ? 'font-bold text-cyan-300' : 'font-bold text-cyan-700') : undefined}>
                 {heading}
               </li>
             );
@@ -394,6 +407,7 @@ export const MetadataDisplay: React.FC<MetadataDisplayProps> = ({ metadata, isDa
             <LcshDisplay
               headings={metadata.lcsh}
               authorityCandidates={metadata.lcshAuthorityCandidates}
+              usedAuthorityHeadings={metadata.authorityAlignment?.usedAuthorityHeadings}
               isDark={isDark}
             />
           )}
