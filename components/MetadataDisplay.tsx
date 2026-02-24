@@ -224,16 +224,53 @@ const LcshDisplay: React.FC<{
     ));
   };
 
+  const parseLcshParts = (heading: string): Array<{ label: string; value: string }> => {
+    const parts = heading.split(' -- ').map((part) => part.trim()).filter(Boolean);
+    if (parts.length === 0) return [];
+    if (parts.length === 1) return [{ label: 'Main', value: parts[0] }];
+    if (parts.length === 2) {
+      return [
+        { label: 'Main', value: parts[0] },
+        { label: 'Subdivision', value: parts[1] },
+      ];
+    }
+
+    const formatted: Array<{ label: string; value: string }> = [
+      { label: 'Main', value: parts[0] },
+      { label: 'Geographic', value: parts[1] },
+    ];
+
+    for (let i = 2; i < parts.length - 1; i += 1) {
+      formatted.push({ label: 'Subdivision', value: parts[i] });
+    }
+
+    formatted.push({ label: 'Form', value: parts[parts.length - 1] });
+    return formatted;
+  };
+
   return (
     <div>
       <dt className={`text-sm font-medium ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>LCSH Headings</dt>
       <dd className={`mt-1 text-sm ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
-        <ul className="list-disc list-inside space-y-1">
+        <ul className="space-y-2">
           {headings.map((heading, index) => {
             const isAuthorityMatch = isAuthorityHeadingMatch(heading);
+            const parsedParts = parseLcshParts(heading);
             return (
-              <li key={`${heading}-${index}`} className={isAuthorityMatch ? (isDark ? 'font-bold text-cyan-300' : 'font-bold text-cyan-700') : undefined}>
-                {heading}
+              <li
+                key={`${heading}-${index}`}
+                className={`rounded-md border px-2 py-1 ${
+                  isDark ? 'border-slate-700 bg-slate-900/50' : 'border-slate-200 bg-slate-50'
+                } ${isAuthorityMatch ? (isDark ? 'text-cyan-300' : 'text-cyan-700') : ''}`}
+              >
+                <dl className="space-y-0.5">
+                  {parsedParts.map((part) => (
+                    <div key={`${heading}-${part.label}-${part.value}`}>
+                      <dt className={`inline text-xs font-semibold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{part.label}:</dt>{' '}
+                      <dd className={`inline ${isAuthorityMatch ? 'font-bold' : ''}`}>{part.value}</dd>
+                    </div>
+                  ))}
+                </dl>
               </li>
             );
           })}
