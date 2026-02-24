@@ -225,7 +225,7 @@ const LcshDisplay: React.FC<{
   };
 
   const parseLcshParts = (heading: string): Array<{ label: string; value: string }> => {
-    const parts = heading.split(' -- ').map((part) => part.trim()).filter(Boolean);
+    const parts = heading.split(/\s*--\s*/g).map((part) => part.trim()).filter(Boolean);
     if (parts.length === 0) return [];
     if (parts.length === 1) return [{ label: 'Main', value: parts[0] }];
     if (parts.length === 2) {
