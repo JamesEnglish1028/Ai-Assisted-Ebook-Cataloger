@@ -235,9 +235,21 @@ const LcshDisplay: React.FC<{
       ];
     }
 
+    const isLikelyGeographicSubdivision = (value: string): boolean => {
+      const normalized = value.trim();
+      if (!normalized) return false;
+      if (/\([^)]*\)/.test(normalized)) return true; // e.g., London (England)
+      if (/, [A-Z]{2}$/.test(normalized)) return true; // e.g., Austin, TX
+      if (/\b(county|city|state|province|territory|region|island|country|england|france|germany|china|japan|canada|mexico|united states|u\.s\.)\b/i.test(normalized)) {
+        return true;
+      }
+      return false;
+    };
+
+    const secondLabel = isLikelyGeographicSubdivision(parts[1]) ? 'Geographic' : 'Subdivision';
     const formatted: Array<{ label: string; value: string }> = [
       { label: 'Main', value: parts[0] },
-      { label: 'Geographic', value: parts[1] },
+      { label: secondLabel, value: parts[1] },
     ];
 
     for (let i = 2; i < parts.length - 1; i += 1) {
@@ -261,12 +273,19 @@ const LcshDisplay: React.FC<{
                 key={`${heading}-${index}`}
                 className={`rounded-md border px-2 py-1 ${
                   isDark ? 'border-slate-700 bg-slate-900/50' : 'border-slate-200 bg-slate-50'
-                } ${isAuthorityMatch ? (isDark ? 'text-cyan-300' : 'text-cyan-700') : ''}`}
+                } ${isAuthorityMatch ? (isDark ? 'border-cyan-500 bg-cyan-950/40 text-cyan-300' : 'border-cyan-300 bg-cyan-50 text-cyan-800') : ''}`}
               >
+                {isAuthorityMatch && (
+                  <div className="mb-1">
+                    <span className={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${isDark ? 'bg-cyan-900 text-cyan-200' : 'bg-cyan-200 text-cyan-900'}`}>
+                      LOC match
+                    </span>
+                  </div>
+                )}
                 <dl className="space-y-0.5">
                   {parsedParts.map((part) => (
                     <div key={`${heading}-${part.label}-${part.value}`}>
-                      <dt className={`inline text-xs font-semibold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{part.label}:</dt>{' '}
+                      <dt className={`inline text-xs font-semibold ${isAuthorityMatch ? (isDark ? 'text-cyan-200' : 'text-cyan-700') : (isDark ? 'text-slate-400' : 'text-slate-500')}`}>{part.label}:</dt>{' '}
                       <dd className={`inline ${isAuthorityMatch ? 'font-bold' : ''}`}>{part.value}</dd>
                     </div>
                   ))}
