@@ -47,7 +47,7 @@ describe('LOC authority service', () => {
   it('builds candidates with direct mode from LoC search results', async () => {
     process.env.ENABLE_LOC_AUTHORITY_ENRICHMENT = 'true';
     process.env.LOC_AUTHORITY_MODE = 'direct';
-    process.env.LOC_DIRECT_SEARCH_URL = 'https://www.loc.gov/books/';
+    process.env.LOC_DIRECT_SEARCH_URL = 'https://www.loc.gov/search/';
 
     const fetchMock = jest
       .fn()
@@ -81,7 +81,80 @@ describe('LOC authority service', () => {
     expect(context?.warnings.length).toBe(0);
     expect(fetchMock).toHaveBeenCalled();
     const firstUrl = String(fetchMock.mock.calls[0][0]);
-    expect(firstUrl).toContain('https://www.loc.gov/books/');
+    expect(firstUrl).toContain('https://www.loc.gov/search/');
     expect(firstUrl).toContain('fo=json');
+  });
+
+  it('prioritizes identifier query before title/author fallback', async () => {
+    process.env.ENABLE_LOC_AUTHORITY_ENRICHMENT = 'true';
+    process.env.LOC_AUTHORITY_MODE = 'direct';
+    process.env.LOC_DIRECT_SEARCH_URL = 'https://www.loc.gov/search/';
+
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValue(
+        makeJsonResponse({
+          results: [
+            {
+              title: 'The Adventures of Sherlock Holmes',
+              url: 'https://www.loc.gov/item/999',
+              subject_headings: ['Detective and mystery stories, English'],
+              contributors: ['Doyle, Arthur Conan, 1859-1930'],
+            },
+          ],
+        }),
+      );
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const context = await buildLocAuthorityContext({
+      title: 'The Adventures of Sherlock Holmes',
+      author: 'Arthur Conan Doyle',
+      identifier: '9781643150918',
+    });
+
+    expect(context?.lcshCandidates.length).toBeGreaterThan(0);
+    const calledUrls = fetchMock.mock.calls.map((call) => String(call[0]));
+    expect(calledUrls[0]).toContain('q=isbn%3A9781643150918');
+    const containsTitleSearch = calledUrls.some((url) => url.includes('q=The+Adventures+of+Sherlock+Holmes'));
+    expect(containsTitleSearch).toBe(false);
+  });
+
+  it('retries once when direct lookup aborts', async () => {
+    process.env.ENABLE_LOC_AUTHORITY_ENRICHMENT = 'true';
+    process.env.LOC_AUTHORITY_MODE = 'direct';
+    process.env.LOC_DIRECT_SEARCH_URL = 'https://www.loc.gov/search/';
+
+    const abortError = new Error('This operation was aborted');
+    (abortError as any).name = 'AbortError';
+
+    const fetchMock = jest
+      .fn()
+      .mockRejectedValueOnce(abortError)
+      .mockResolvedValue(
+        makeJsonResponse({
+          results: [
+            {
+              title: 'The Adventures of Sherlock Holmes',
+              url: 'https://www.loc.gov/item/777',
+              subject_headings: ['Detective and mystery stories, English'],
+              contributors: ['Doyle, Arthur Conan, 1859-1930'],
+            },
+          ],
+        }),
+      );
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const context = await buildLocAuthorityContext({
+      title: 'The Adventures of Sherlock Holmes',
+      author: 'Arthur Conan Doyle',
+    });
+
+    expect(fetchMock).toHaveBeenCalled();
+    const firstUrl = String(fetchMock.mock.calls[0][0]);
+    const secondUrl = String(fetchMock.mock.calls[1][0]);
+    expect(firstUrl).toBe(secondUrl);
+    expect(firstUrl).toContain('q=The+Adventures+of+Sherlock+Holmes');
+    expect(context?.lcshCandidates.length).toBeGreaterThan(0);
+    expect(context?.warnings.length).toBe(0);
   });
 });

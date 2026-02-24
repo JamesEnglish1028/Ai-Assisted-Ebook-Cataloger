@@ -391,6 +391,23 @@ const fetchJsonWithTimeout = async (url: string, timeoutMs: number): Promise<unk
   }
 };
 
+const isAbortLikeError = (error: unknown): boolean => {
+  if (!error) return false;
+  const err = error as { name?: string; message?: string };
+  const message = String(err.message || '').toLowerCase();
+  return err.name === 'AbortError' || message.includes('aborted');
+};
+
+const fetchJsonWithRetry = async (url: string, timeoutMs: number): Promise<unknown> => {
+  try {
+    return await fetchJsonWithTimeout(url, timeoutMs);
+  } catch (error) {
+    if (!isAbortLikeError(error)) throw error;
+    // Retry once with a relaxed timeout for transient upstream latency.
+    return await fetchJsonWithTimeout(url, timeoutMs * 2);
+  }
+};
+
 const extractLocItems = (payload: unknown): Record<string, unknown>[] => {
   if (!payload || typeof payload !== 'object') return [];
   const record = payload as Record<string, unknown>;
@@ -531,34 +548,62 @@ const buildViaDirect = async (
   const detailUrls = new Set<string>();
 
   const identifier = sanitizeIdentifier(input.identifier);
-  const queryPlan = [
-    ...(identifier ? [`isbn:${identifier}`] : []),
-    ...buildSubjectQueries(input),
-    ...buildNameQueries(input),
-  ];
-  const queries = toUniqueArray(queryPlan).slice(0, 6);
+  const runSearchPhase = async (queries: string[]): Promise<boolean> => {
+    const normalizedQueries = toUniqueArray(queries).slice(0, 6);
+    let phaseProducedCandidates = false;
 
-  for (const query of queries) {
-    try {
-      const searchPayload = await fetchJsonWithTimeout(
-        buildLocSearchUrl(searchBaseUrl, query, maxResults),
-        timeoutMs,
-      );
-      const items = extractLocItems(searchPayload);
-      const mapped = mapLocItemsToCandidates(items, query);
-      mapped.headings.forEach((candidate) => headings.push(candidate));
-      mapped.names.forEach((candidate) => names.push(candidate));
-      mapped.detailUrls.forEach((url) => detailUrls.add(url));
-    } catch (error: any) {
-      warnings.push(`direct LOC search failed for "${query}": ${error?.message || 'unknown error'}`);
+    for (const query of normalizedQueries) {
+      if (!query.trim()) continue;
+      try {
+        const searchPayload = await fetchJsonWithRetry(
+          buildLocSearchUrl(searchBaseUrl, query, maxResults),
+          timeoutMs,
+        );
+        const items = extractLocItems(searchPayload);
+        const mapped = mapLocItemsToCandidates(items, query);
+        if (mapped.headings.length > 0 || mapped.names.length > 0 || mapped.detailUrls.length > 0) {
+          phaseProducedCandidates = true;
+        }
+        mapped.headings.forEach((candidate) => headings.push(candidate));
+        mapped.names.forEach((candidate) => names.push(candidate));
+        mapped.detailUrls.forEach((url) => detailUrls.add(url));
+      } catch (error: any) {
+        warnings.push(`direct LOC search failed for "${query}": ${error?.message || 'unknown error'}`);
+      }
     }
+    return phaseProducedCandidates;
+  };
+
+  // Priority 1: identifier query
+  let found = false;
+  if (identifier) {
+    found = await runSearchPhase([`isbn:${identifier}`, identifier]);
+  }
+
+  // Priority 2: title/title+author query
+  if (!found) {
+    const title = (input.title || '').trim();
+    const author = (input.author || '').trim();
+    found = await runSearchPhase([
+      title,
+      title && author ? `${title} ${author}` : '',
+      author,
+    ].filter(Boolean));
+  }
+
+  // Priority 3: subject + keyword + remaining names fallback
+  if (!found) {
+    found = await runSearchPhase([
+      ...buildSubjectQueries(input),
+      ...buildNameQueries(input),
+    ]);
   }
 
   const detailTargets = Array.from(detailUrls).slice(0, 3);
   await Promise.all(
     detailTargets.map(async (detailUrl) => {
       try {
-        const detailPayload = await fetchJsonWithTimeout(
+        const detailPayload = await fetchJsonWithRetry(
           `${detailUrl}${detailUrl.includes('?') ? '&' : '?'}fo=json`,
           timeoutMs,
         );
