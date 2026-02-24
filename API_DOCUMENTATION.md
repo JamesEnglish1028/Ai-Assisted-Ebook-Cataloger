@@ -338,9 +338,13 @@ GEMINI_API_KEY=your_gemini_api_key_here
 PORT=3001
 # Optional: Phase 1 LOC authority enrichment via cataloger-mcp
 ENABLE_LOC_AUTHORITY_ENRICHMENT=false
+# Mode: mcp | direct (Render defaults to direct when unset)
+LOC_AUTHORITY_MODE=direct
 LOC_AUTHORITY_MCP_URL=http://localhost:3002/mcp
 LOC_AUTHORITY_TIMEOUT_MS=3500
 LOC_AUTHORITY_MAX_RESULTS=5
+# Optional override for direct LOC API search base
+LOC_DIRECT_SEARCH_URL=https://www.loc.gov/books/
 
 # Optional: Phase A/B Open Library metadata enrichment via mcp-open-library
 ENABLE_OPEN_LIBRARY_ENRICHMENT=false

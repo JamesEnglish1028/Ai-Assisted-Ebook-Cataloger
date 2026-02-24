@@ -15,7 +15,7 @@ export interface LocAuthorityNameCandidate {
 }
 
 export interface LocAuthorityContext {
-  provider: 'cataloger-mcp';
+  provider: 'cataloger-mcp' | 'loc-gov-direct';
   enabled: boolean;
   lcshCandidates: LocAuthorityHeadingCandidate[];
   nameCandidates: LocAuthorityNameCandidate[];
@@ -28,6 +28,7 @@ export interface LocAuthorityInput {
   narrator?: string;
   subject?: string;
   keywords?: string;
+  identifier?: string;
 }
 
 interface McpTextContent {
@@ -41,9 +42,13 @@ interface McpResultEnvelope {
 }
 
 const ENABLE_FLAG = 'ENABLE_LOC_AUTHORITY_ENRICHMENT';
+const MODE_KEY = 'LOC_AUTHORITY_MODE';
 const MCP_URL_KEY = 'LOC_AUTHORITY_MCP_URL';
 const TIMEOUT_MS_KEY = 'LOC_AUTHORITY_TIMEOUT_MS';
 const MAX_RESULTS_KEY = 'LOC_AUTHORITY_MAX_RESULTS';
+const DIRECT_SEARCH_URL_KEY = 'LOC_DIRECT_SEARCH_URL';
+
+export type LocAuthorityMode = 'mcp' | 'direct';
 
 const TRUE_VALUES = new Set(['1', 'true', 'yes', 'on']);
 
@@ -62,11 +67,27 @@ export const isLocAuthorityEnrichmentEnabled = (): boolean => {
   return parseBooleanEnv(process.env[ENABLE_FLAG]);
 };
 
+export const getLocAuthorityMode = (): LocAuthorityMode => {
+  const configured = (process.env[MODE_KEY] || '').trim().toLowerCase();
+  if (configured === 'mcp' || configured === 'direct') {
+    return configured;
+  }
+
+  // Render deployments default to direct mode to avoid MCP stdio runtime dependencies.
+  if (parseBooleanEnv(process.env.RENDER)) {
+    return 'direct';
+  }
+
+  return 'mcp';
+};
+
 export const getLocAuthorityFeatureCacheKey = (): string => {
   const enabled = isLocAuthorityEnrichmentEnabled() ? '1' : '0';
+  const mode = getLocAuthorityMode();
   const endpoint = (process.env[MCP_URL_KEY] || '').trim() || 'unset';
+  const directBase = (process.env[DIRECT_SEARCH_URL_KEY] || '').trim() || 'https://www.loc.gov/books/';
   const maxResults = parseIntegerEnv(process.env[MAX_RESULTS_KEY], 5);
-  return `locauth:${enabled}:${endpoint}:${maxResults}`;
+  return `locauth:${enabled}:${mode}:${endpoint}:${directBase}:${maxResults}`;
 };
 
 const sanitizeAndSplitList = (value: string | undefined): string[] => {
@@ -267,17 +288,125 @@ const normalizeArrayPayload = (payload: unknown): unknown[] => {
   return candidates;
 };
 
-export const buildLocAuthorityContext = async (
-  input: LocAuthorityInput,
-): Promise<LocAuthorityContext | null> => {
-  if (!isLocAuthorityEnrichmentEnabled()) {
-    return null;
+const toUniqueArray = (items: string[]): string[] => {
+  return Array.from(new Map(items.map((item) => [item.toLowerCase(), item])).values());
+};
+
+const toStringList = (value: unknown): string[] => {
+  if (!value) return [];
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => {
+        if (typeof entry === 'string') return entry.trim();
+        if (entry && typeof entry === 'object') {
+          const record = entry as Record<string, unknown>;
+          const text =
+            (typeof record.heading === 'string' && record.heading) ||
+            (typeof record.subject === 'string' && record.subject) ||
+            (typeof record.name === 'string' && record.name) ||
+            (typeof record.label === 'string' && record.label) ||
+            '';
+          return text.trim();
+        }
+        return '';
+      })
+      .filter((entry) => !!entry);
+  }
+  if (typeof value === 'string' && value.trim()) return [value.trim()];
+  return [];
+};
+
+const sanitizeIdentifier = (value: string | undefined): string | undefined => {
+  if (!value) return undefined;
+  const cleaned = value.replace(/[-\s]/g, '').trim();
+  return cleaned.length >= 8 ? cleaned : undefined;
+};
+
+const buildLocSearchUrl = (baseUrl: string, query: string, maxResults: number): string => {
+  const normalizedBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+  const url = new URL(normalizedBase);
+  url.searchParams.set('fo', 'json');
+  url.searchParams.set('q', query);
+  url.searchParams.set('c', String(maxResults));
+  url.searchParams.set('sp', '1');
+  return url.toString();
+};
+
+const fetchJsonWithTimeout = async (url: string, timeoutMs: number): Promise<unknown> => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    if (!response.ok) {
+      const detail = await response.text();
+      throw new Error(`HTTP ${response.status}: ${detail}`);
+    }
+    return await response.json();
+  } finally {
+    clearTimeout(timeoutId);
+  }
+};
+
+const extractLocItems = (payload: unknown): Record<string, unknown>[] => {
+  if (!payload || typeof payload !== 'object') return [];
+  const record = payload as Record<string, unknown>;
+  const rawResults = Array.isArray(record.results)
+    ? record.results
+    : Array.isArray(record.items)
+      ? record.items
+      : [];
+  return rawResults.filter((item): item is Record<string, unknown> => !!item && typeof item === 'object');
+};
+
+const mapLocItemsToCandidates = (
+  items: Record<string, unknown>[],
+  query: string,
+): { headings: LocAuthorityHeadingCandidate[]; names: LocAuthorityNameCandidate[]; detailUrls: string[] } => {
+  const headings: LocAuthorityHeadingCandidate[] = [];
+  const names: LocAuthorityNameCandidate[] = [];
+  const detailUrls: string[] = [];
+
+  for (const item of items) {
+    const itemUrl = typeof item.url === 'string' ? item.url : undefined;
+    if (itemUrl) detailUrls.push(itemUrl);
+
+    for (const heading of toStringList(item.subject_headings ?? item.subjects ?? item.subject)) {
+      headings.push({
+        heading,
+        uri: itemUrl,
+        query,
+        tool: 'search_lcsh_keyword',
+      });
+    }
+
+    const rawNames = [
+      ...toStringList(item.contributors),
+      ...toStringList(item.creator),
+      ...toStringList(item.creators),
+      ...toStringList(item.author),
+      ...toStringList(item.authors),
+      ...toStringList(item.name),
+    ];
+    for (const label of rawNames) {
+      names.push({
+        label,
+        uri: itemUrl,
+        query,
+        tool: 'search_name_authority',
+      });
+    }
   }
 
-  const mcpUrl = (process.env[MCP_URL_KEY] || '').trim();
-  const timeoutMs = Math.max(500, parseIntegerEnv(process.env[TIMEOUT_MS_KEY], 3500));
-  const maxResults = Math.max(1, Math.min(10, parseIntegerEnv(process.env[MAX_RESULTS_KEY], 5)));
+  return { headings, names, detailUrls: toUniqueArray(detailUrls).slice(0, 3) };
+};
+
+const buildViaMcp = async (
+  input: LocAuthorityInput,
+  timeoutMs: number,
+  maxResults: number,
+): Promise<LocAuthorityContext> => {
   const warnings: string[] = [];
+  const mcpUrl = (process.env[MCP_URL_KEY] || '').trim();
 
   if (!mcpUrl) {
     return {
@@ -340,4 +469,82 @@ export const buildLocAuthorityContext = async (
     nameCandidates: dedupeNames(nameResults.flat()).slice(0, 10),
     warnings,
   };
+};
+
+const buildViaDirect = async (
+  input: LocAuthorityInput,
+  timeoutMs: number,
+  maxResults: number,
+): Promise<LocAuthorityContext> => {
+  const warnings: string[] = [];
+  const searchBaseUrl = (process.env[DIRECT_SEARCH_URL_KEY] || 'https://www.loc.gov/books/').trim();
+
+  const headings: LocAuthorityHeadingCandidate[] = [];
+  const names: LocAuthorityNameCandidate[] = [];
+  const detailUrls = new Set<string>();
+
+  const identifier = sanitizeIdentifier(input.identifier);
+  const queryPlan = [
+    ...(identifier ? [`isbn:${identifier}`] : []),
+    ...buildSubjectQueries(input),
+    ...buildNameQueries(input),
+  ];
+  const queries = toUniqueArray(queryPlan).slice(0, 6);
+
+  for (const query of queries) {
+    try {
+      const searchPayload = await fetchJsonWithTimeout(
+        buildLocSearchUrl(searchBaseUrl, query, maxResults),
+        timeoutMs,
+      );
+      const items = extractLocItems(searchPayload);
+      const mapped = mapLocItemsToCandidates(items, query);
+      mapped.headings.forEach((candidate) => headings.push(candidate));
+      mapped.names.forEach((candidate) => names.push(candidate));
+      mapped.detailUrls.forEach((url) => detailUrls.add(url));
+    } catch (error: any) {
+      warnings.push(`direct LOC search failed for "${query}": ${error?.message || 'unknown error'}`);
+    }
+  }
+
+  const detailTargets = Array.from(detailUrls).slice(0, 3);
+  await Promise.all(
+    detailTargets.map(async (detailUrl) => {
+      try {
+        const detailPayload = await fetchJsonWithTimeout(
+          `${detailUrl}${detailUrl.includes('?') ? '&' : '?'}fo=json`,
+          timeoutMs,
+        );
+        const detailItems = extractLocItems(detailPayload);
+        const mapped = mapLocItemsToCandidates(detailItems, detailUrl);
+        mapped.headings.forEach((candidate) => headings.push(candidate));
+        mapped.names.forEach((candidate) => names.push(candidate));
+      } catch (error: any) {
+        warnings.push(`direct LOC detail lookup failed for "${detailUrl}": ${error?.message || 'unknown error'}`);
+      }
+    }),
+  );
+
+  return {
+    provider: 'loc-gov-direct',
+    enabled: true,
+    lcshCandidates: dedupeHeadings(headings).slice(0, 20),
+    nameCandidates: dedupeNames(names).slice(0, 10),
+    warnings,
+  };
+};
+
+export const buildLocAuthorityContext = async (
+  input: LocAuthorityInput,
+): Promise<LocAuthorityContext | null> => {
+  if (!isLocAuthorityEnrichmentEnabled()) {
+    return null;
+  }
+
+  const mode = getLocAuthorityMode();
+  const timeoutMs = Math.max(500, parseIntegerEnv(process.env[TIMEOUT_MS_KEY], 3500));
+  const maxResults = Math.max(1, Math.min(10, parseIntegerEnv(process.env[MAX_RESULTS_KEY], 5)));
+  return mode === 'direct'
+    ? buildViaDirect(input, timeoutMs, maxResults)
+    : buildViaMcp(input, timeoutMs, maxResults);
 };

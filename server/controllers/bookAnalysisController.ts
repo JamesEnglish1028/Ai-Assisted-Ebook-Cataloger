@@ -240,6 +240,7 @@ export async function analyzeBook(req: Request, res: Response, next: NextFunctio
       narrator: parseResult.metadata.narrator,
       subject: parseResult.metadata.subject,
       keywords: parseResult.metadata.keywords,
+      identifier: parseResult.metadata.identifier?.value,
     });
     const openLibraryContext = await buildOpenLibraryContext({
       title: parseResult.metadata.title,
@@ -466,6 +467,9 @@ export async function analyzeExtractedText(req: Request, res: Response, next: Ne
       narrator: typeof metadata.narrator === 'string' ? metadata.narrator : undefined,
       subject: typeof metadata.subject === 'string' ? metadata.subject : undefined,
       keywords: typeof metadata.keywords === 'string' ? metadata.keywords : undefined,
+      identifier: typeof (metadata.identifier as any)?.value === 'string'
+        ? (metadata.identifier as any).value
+        : undefined,
     });
     const openLibraryContext = await buildOpenLibraryContext({
       title: typeof metadata.title === 'string' ? metadata.title : undefined,

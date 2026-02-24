@@ -197,7 +197,9 @@ Ai-Assisted-Ebook-Cataloger/
 | `ALLOWED_ORIGINS` | Comma-separated list of allowed browser origins for API CORS | No |
 | `SERVE_STATIC` | Set `false` when deploying API + frontend as separate Render services | No |
 | `ENABLE_LOC_AUTHORITY_ENRICHMENT` | Enable LOC authority enrichment | No |
+| `LOC_AUTHORITY_MODE` | `mcp` or `direct` (defaults to `direct` on Render if unset) | No |
 | `LOC_AUTHORITY_MCP_URL` | HTTP MCP endpoint for LOC authority service | No |
+| `LOC_DIRECT_SEARCH_URL` | LOC JSON API search base used in `direct` mode | No |
 | `ENABLE_OPEN_LIBRARY_ENRICHMENT` | Enable Open Library metadata enrichment | No |
 | `OPEN_LIBRARY_ENRICHMENT_MODE` | `shadow` or `apply` | No |
 | `OPEN_LIBRARY_MCP_URL` | HTTP MCP endpoint for Open Library service | No |
@@ -296,9 +298,11 @@ Set/verify these values in Render:
    - `ANTHROPIC_API_KEY` (set if using Anthropic provider)
    - `ALLOWED_ORIGINS` (set to your static-site URL, e.g. `https://ai-ebook-cataloger-web.onrender.com`)
    - `ENABLE_LOC_AUTHORITY_ENRICHMENT=true`
+   - `LOC_AUTHORITY_MODE=direct` (recommended on Render)
    - `LOC_AUTHORITY_MCP_URL=https://<your-loc-bridge>.onrender.com/mcp`
    - `LOC_AUTHORITY_TIMEOUT_MS=3500`
    - `LOC_AUTHORITY_MAX_RESULTS=5`
+   - `LOC_DIRECT_SEARCH_URL=https://www.loc.gov/books/`
    - `ENABLE_OPEN_LIBRARY_ENRICHMENT=true`
    - `OPEN_LIBRARY_ENRICHMENT_MODE=shadow` (recommended rollout start)
    - `OPEN_LIBRARY_MCP_URL=https://<your-openlib-bridge>.onrender.com/mcp`
@@ -369,6 +373,11 @@ Create another Render **Web Service** from the same repo:
 5. If browser calls fail, verify `ALLOWED_ORIGINS` includes your static site URL.
 
 Note: no LoC/Open Library API keys are required for this architecture; only your AI provider keys are required.
+
+If you do not run a LOC MCP bridge service, you can still use LOC enrichment by keeping:
+- `ENABLE_LOC_AUTHORITY_ENRICHMENT=true`
+- `LOC_AUTHORITY_MODE=direct`
+and omitting `LOC_AUTHORITY_MCP_URL`.
 
 **For detailed deployment instructions, see:** [RENDER_DEPLOYMENT.md](./RENDER_DEPLOYMENT.md)
 
