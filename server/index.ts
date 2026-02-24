@@ -152,22 +152,6 @@ const OPENAPI_SPEC = {
         },
       },
     },
-    '/redoc': {
-      get: {
-        summary: 'ReDoc OpenAPI UI',
-        responses: {
-          '200': { description: 'ReDoc HTML UI' },
-        },
-      },
-    },
-    '/openapi.json': {
-      get: {
-        summary: 'OpenAPI document',
-        responses: {
-          '200': { description: 'OpenAPI JSON' },
-        },
-      },
-    },
   },
 };
 
