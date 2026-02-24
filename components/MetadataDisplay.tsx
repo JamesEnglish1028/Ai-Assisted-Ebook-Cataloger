@@ -37,6 +37,11 @@ interface LocAuthoritySummary {
   warnings?: string[];
 }
 
+interface LocAuthorityHeadingCandidate {
+  heading?: string;
+  label?: string;
+}
+
 interface OpenLibrarySummary {
   provider: string;
   mode: 'shadow' | 'apply';
@@ -126,6 +131,7 @@ export interface FileMetadata {
   fieldOfStudy?: string;
   discipline?: string;
   locAuthority?: LocAuthoritySummary;
+  lcshAuthorityCandidates?: LocAuthorityHeadingCandidate[];
   authorityAlignment?: AuthorityAlignment;
   openLibrary?: OpenLibrarySummary;
   openLibraryBook?: OpenLibraryBook;
@@ -182,6 +188,47 @@ const MetadataListItem: React.FC<{ label: string; values: string[]; isDark: bool
       </dd>
     </div>
   );
+
+const normalizeHeadingForMatch = (value: string): string => {
+  return value
+    .toLowerCase()
+    .replace(/[\p{P}\p{S}]+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+};
+
+const LcshDisplay: React.FC<{
+  headings: string[];
+  authorityCandidates?: LocAuthorityHeadingCandidate[];
+  isDark: boolean;
+}> = ({ headings, authorityCandidates, isDark }) => {
+  if (!headings || headings.length === 0) return null;
+
+  const authoritySet = new Set(
+    (authorityCandidates || [])
+      .map((candidate) => (candidate.heading || candidate.label || '').trim())
+      .filter((value) => value.length > 0)
+      .map(normalizeHeadingForMatch),
+  );
+
+  return (
+    <div>
+      <dt className={`text-sm font-medium ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>LCSH Headings</dt>
+      <dd className={`mt-1 text-sm ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
+        <ul className="list-disc list-inside space-y-1">
+          {headings.map((heading, index) => {
+            const isAuthorityMatch = authoritySet.has(normalizeHeadingForMatch(heading));
+            return (
+              <li key={`${heading}-${index}`} className={isAuthorityMatch ? 'font-semibold' : undefined}>
+                {heading}
+              </li>
+            );
+          })}
+        </ul>
+      </dd>
+    </div>
+  );
+};
 
 const LccDisplay: React.FC<{ classifications: LccClassification[]; isDark: boolean }> = ({ classifications, isDark }) => {
     const grouped: { [key: string]: { mainClass: string; subClasses: string[] } } = {};
@@ -343,7 +390,13 @@ export const MetadataDisplay: React.FC<MetadataDisplayProps> = ({ metadata, isDa
           {metadata.fieldOfStudy && <MetadataItem label="Field of Study" value={metadata.fieldOfStudy} isDark={isDark} />}
           {metadata.discipline && <MetadataItem label="Discipline" value={metadata.discipline} isDark={isDark} />}
           {metadata.lcc && metadata.lcc.length > 0 && <LccDisplay classifications={metadata.lcc} isDark={isDark} />}
-          {metadata.lcsh && metadata.lcsh.length > 0 && <MetadataListItem label="LCSH Headings" values={metadata.lcsh} isDark={isDark} />}
+          {metadata.lcsh && metadata.lcsh.length > 0 && (
+            <LcshDisplay
+              headings={metadata.lcsh}
+              authorityCandidates={metadata.lcshAuthorityCandidates}
+              isDark={isDark}
+            />
+          )}
           {metadata.bisac && metadata.bisac.length > 0 && <BisacDisplay headings={metadata.bisac} isDark={isDark} />}
         </dl>
       </Section>
