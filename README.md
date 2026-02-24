@@ -112,6 +112,7 @@ The frontend will proxy `/api/*` requests to the backend server automatically.
 
 The API is designed for integration with other applications like meBooks. See [API_DOCUMENTATION.md](./API_DOCUMENTATION.md) for complete API reference.
 You can also view the API docs at runtime via `GET /rdoc` on the API server.
+For OpenAPI/ReDoc UI, use `GET /redoc` (spec available at `GET /openapi.json`).
 
 ### Quick Example
 

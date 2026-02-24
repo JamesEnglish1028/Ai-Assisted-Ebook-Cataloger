@@ -20,6 +20,15 @@ Renders this API documentation as an HTML page served directly by the API server
 - `200 OK` HTML page containing the current `API_DOCUMENTATION.md` content
 - `500` JSON error if documentation cannot be loaded
 
+### API Documentation (ReDoc)
+
+**GET** `/redoc`
+
+Renders an OpenAPI-based interactive API reference using ReDoc.
+
+Related endpoint:
+- **GET** `/openapi.json` - OpenAPI specification consumed by ReDoc.
+
 ### Health Check
 
 **GET** `/health`

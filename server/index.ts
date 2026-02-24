@@ -39,6 +39,137 @@ dotenv.config();
 const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
 const SERVE_STATIC = process.env.SERVE_STATIC !== 'false';
+const OPENAPI_SPEC = {
+  openapi: '3.0.3',
+  info: {
+    title: 'AI Ebook Cataloger API',
+    version: '1.0.0',
+    description: 'REST API for analyzing ebooks/audiobooks and generating enriched metadata.',
+  },
+  servers: [
+    { url: '/' },
+  ],
+  paths: {
+    '/health': {
+      get: {
+        summary: 'Health check',
+        responses: {
+          '200': {
+            description: 'Server is healthy',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    status: { type: 'string', example: 'ok' },
+                    message: { type: 'string', example: 'AI Ebook Cataloger API is running' },
+                  },
+                  required: ['status', 'message'],
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/api/health': {
+      get: {
+        summary: 'Health check alias',
+        responses: {
+          '200': {
+            description: 'Server is healthy',
+          },
+        },
+      },
+    },
+    '/api/analyze-book': {
+      post: {
+        summary: 'Analyze an uploaded ebook/audiobook file',
+        requestBody: {
+          required: true,
+          content: {
+            'multipart/form-data': {
+              schema: {
+                type: 'object',
+                properties: {
+                  file: { type: 'string', format: 'binary' },
+                  aiProvider: { type: 'string', enum: ['google', 'openai', 'anthropic'] },
+                  aiModel: { type: 'string' },
+                  transcriptionMode: { type: 'string', enum: ['metadata-only', 'transcribe-preview', 'transcribe-full'] },
+                  transcriptionMaxMinutes: { type: 'integer' },
+                  transcriptionIncludeTimestamps: { type: 'boolean' },
+                },
+                required: ['file'],
+              },
+            },
+          },
+        },
+        responses: {
+          '200': { description: 'Analysis result returned' },
+          '400': { description: 'Validation error' },
+          '422': { description: 'Parsing/transcription error' },
+          '503': { description: 'AI service error' },
+        },
+      },
+    },
+    '/api/analyze-text': {
+      post: {
+        summary: 'Analyze pre-extracted text',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  text: { type: 'string' },
+                  sourceType: { type: 'string' },
+                  metadata: { type: 'object' },
+                  telemetry: { type: 'object' },
+                  coverImage: { type: 'string' },
+                  fileName: { type: 'string' },
+                  fileType: { type: 'string' },
+                  aiProvider: { type: 'string', enum: ['google', 'openai', 'anthropic'] },
+                  aiModel: { type: 'string' },
+                },
+                required: ['text'],
+              },
+            },
+          },
+        },
+        responses: {
+          '200': { description: 'Analysis result returned' },
+          '400': { description: 'Validation error' },
+          '503': { description: 'AI service error' },
+        },
+      },
+    },
+    '/rdoc': {
+      get: {
+        summary: 'Render markdown API docs as HTML',
+        responses: {
+          '200': { description: 'HTML docs' },
+        },
+      },
+    },
+    '/redoc': {
+      get: {
+        summary: 'ReDoc OpenAPI UI',
+        responses: {
+          '200': { description: 'ReDoc HTML UI' },
+        },
+      },
+    },
+    '/openapi.json': {
+      get: {
+        summary: 'OpenAPI document',
+        responses: {
+          '200': { description: 'OpenAPI JSON' },
+        },
+      },
+    },
+  },
+};
 
 // Security middleware
 app.use(helmet());
@@ -119,6 +250,30 @@ const healthHandler = (req: express.Request, res: express.Response) => {
 
 app.get('/health', healthHandler);
 app.get('/api/health', healthHandler);
+app.get('/openapi.json', (req, res) => {
+  res.json(OPENAPI_SPEC);
+});
+
+app.get('/redoc', (req, res) => {
+  res
+    .status(200)
+    .type('html')
+    .send(`<!doctype html>
+<html>
+  <head>
+    <title>AI Ebook Cataloger API - ReDoc</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      body { margin: 0; padding: 0; }
+    </style>
+  </head>
+  <body>
+    <redoc spec-url="/openapi.json"></redoc>
+    <script src="https://cdn.jsdelivr.net/npm/redoc@next/bundles/redoc.standalone.js"></script>
+  </body>
+</html>`);
+});
 
 const escapeHtml = (value: string): string =>
   value
@@ -198,6 +353,9 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 API Server running on port ${PORT}`);
   console.log(`📚 Health check: /health`);
+  console.log(`📚 Health check alias: /api/health`);
+  console.log(`🧭 OpenAPI JSON: /openapi.json`);
+  console.log(`🧭 ReDoc UI: /redoc`);
   console.log(`📘 API docs: /rdoc`);
   console.log(`📖 Analyze endpoint: /api/analyze-book`);
   if (process.env.NODE_ENV === 'production') {
