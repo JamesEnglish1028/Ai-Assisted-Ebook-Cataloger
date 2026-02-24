@@ -85,7 +85,7 @@ export const getLocAuthorityFeatureCacheKey = (): string => {
   const enabled = isLocAuthorityEnrichmentEnabled() ? '1' : '0';
   const mode = getLocAuthorityMode();
   const endpoint = (process.env[MCP_URL_KEY] || '').trim() || 'unset';
-  const directBase = (process.env[DIRECT_SEARCH_URL_KEY] || '').trim() || 'https://www.loc.gov/books/';
+  const directBase = (process.env[DIRECT_SEARCH_URL_KEY] || '').trim() || 'https://www.loc.gov/search/';
   const maxResults = parseIntegerEnv(process.env[MAX_RESULTS_KEY], 5);
   return `locauth:${enabled}:${mode}:${endpoint}:${directBase}:${maxResults}`;
 };
@@ -524,7 +524,7 @@ const buildViaDirect = async (
   maxResults: number,
 ): Promise<LocAuthorityContext> => {
   const warnings: string[] = [];
-  const searchBaseUrl = (process.env[DIRECT_SEARCH_URL_KEY] || 'https://www.loc.gov/books/').trim();
+  const searchBaseUrl = (process.env[DIRECT_SEARCH_URL_KEY] || 'https://www.loc.gov/search/').trim();
 
   const headings: LocAuthorityHeadingCandidate[] = [];
   const names: LocAuthorityNameCandidate[] = [];

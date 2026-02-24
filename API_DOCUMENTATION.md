@@ -344,7 +344,7 @@ LOC_AUTHORITY_MCP_URL=http://localhost:3002/mcp
 LOC_AUTHORITY_TIMEOUT_MS=3500
 LOC_AUTHORITY_MAX_RESULTS=5
 # Optional override for direct LOC API search base
-LOC_DIRECT_SEARCH_URL=https://www.loc.gov/books/
+LOC_DIRECT_SEARCH_URL=https://www.loc.gov/search/
 
 # Optional: Phase A/B Open Library metadata enrichment via mcp-open-library
 ENABLE_OPEN_LIBRARY_ENRICHMENT=false

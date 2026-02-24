@@ -302,7 +302,7 @@ Set/verify these values in Render:
    - `LOC_AUTHORITY_MCP_URL=https://<your-loc-bridge>.onrender.com/mcp`
    - `LOC_AUTHORITY_TIMEOUT_MS=3500`
    - `LOC_AUTHORITY_MAX_RESULTS=5`
-   - `LOC_DIRECT_SEARCH_URL=https://www.loc.gov/books/`
+   - `LOC_DIRECT_SEARCH_URL=https://www.loc.gov/search/`
    - `ENABLE_OPEN_LIBRARY_ENRICHMENT=true`
    - `OPEN_LIBRARY_ENRICHMENT_MODE=shadow` (recommended rollout start)
    - `OPEN_LIBRARY_MCP_URL=https://<your-openlib-bridge>.onrender.com/mcp`
