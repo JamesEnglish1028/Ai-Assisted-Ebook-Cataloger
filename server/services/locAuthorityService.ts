@@ -19,6 +19,7 @@ export interface LocAuthorityContext {
   enabled: boolean;
   lcshCandidates: LocAuthorityHeadingCandidate[];
   nameCandidates: LocAuthorityNameCandidate[];
+  recordLinks?: LocAuthorityRecordLinks;
   warnings: string[];
 }
 
@@ -29,6 +30,14 @@ export interface LocAuthorityInput {
   subject?: string;
   keywords?: string;
   identifier?: string;
+}
+
+export interface LocAuthorityRecordLinks {
+  lccn: string;
+  permalinkUrl: string;
+  marcXmlUrl: string;
+  modsUrl: string;
+  bibframe2Url: string;
 }
 
 interface McpTextContent {
@@ -423,6 +432,64 @@ const buildLocSearchUrl = (baseUrl: string, query: string, maxResults: number): 
   return url.toString();
 };
 
+const normalizeLccn = (value: string): string | null => {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  const fromUrlMatch = trimmed.match(/lccn\.loc\.gov\/([^/?#\s]+)/i);
+  let candidate = fromUrlMatch ? fromUrlMatch[1] : trimmed;
+
+  candidate = candidate
+    .replace(/^(lccn)\s*[:#]?\s*/i, '')
+    .replace(/\s+/g, '')
+    .replace(/[^a-z0-9-]/gi, '')
+    .toLowerCase();
+
+  if (!candidate) return null;
+  if (!/^[a-z]{0,4}\d{6,12}$/.test(candidate) && !/^[a-z]{0,4}\d{2,4}-\d{6}$/.test(candidate)) {
+    return null;
+  }
+
+  return candidate;
+};
+
+const buildRecordLinksFromLccn = (lccn: string): LocAuthorityRecordLinks => {
+  const encoded = encodeURIComponent(lccn);
+  const permalinkUrl = `https://lccn.loc.gov/${encoded}`;
+  return {
+    lccn,
+    permalinkUrl,
+    marcXmlUrl: `${permalinkUrl}/marcxml`,
+    modsUrl: `${permalinkUrl}/mods`,
+    bibframe2Url: `${permalinkUrl}/bibframe2`,
+  };
+};
+
+const extractLccnCandidates = (item: Record<string, unknown>): string[] => {
+  const candidates: string[] = [];
+  const addRaw = (raw: unknown) => {
+    for (const value of toStringList(raw)) {
+      const normalized = normalizeLccn(value);
+      if (normalized) candidates.push(normalized);
+    }
+  };
+
+  addRaw(item.lccn);
+  addRaw(item.lccns);
+  addRaw(item.identifier_lccn);
+  addRaw(item.lccn_url);
+  addRaw(item.lccn_permalink);
+
+  const identifiers = item.identifiers;
+  if (identifiers && typeof identifiers === 'object') {
+    const record = identifiers as Record<string, unknown>;
+    addRaw(record.lccn);
+    addRaw(record.lccns);
+  }
+
+  return toUniqueArray(candidates);
+};
+
 const fetchJsonWithTimeout = async (url: string, timeoutMs: number): Promise<unknown> => {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -536,10 +603,16 @@ const mapLocItemsToCandidates = (
   items: Record<string, unknown>[],
   query: string,
   input: LocAuthorityInput,
-): { headings: LocAuthorityHeadingCandidate[]; names: LocAuthorityNameCandidate[]; detailUrls: string[] } => {
+): {
+  headings: LocAuthorityHeadingCandidate[];
+  names: LocAuthorityNameCandidate[];
+  detailUrls: string[];
+  lccns: string[];
+} => {
   const headings: LocAuthorityHeadingCandidate[] = [];
   const names: LocAuthorityNameCandidate[] = [];
   const detailUrls: string[] = [];
+  const lccns: string[] = [];
 
   const rankedItems = rankItems(items, input);
   for (const item of rankedItems) {
@@ -550,6 +623,7 @@ const mapLocItemsToCandidates = (
     const itemUrl = normalizeLocUrl(typeof item.url === 'string' ? item.url : undefined);
     const isLikelyItem = isLikelyLocItemUrl(itemUrl);
     if (isLikelyItem && itemUrl) detailUrls.push(itemUrl);
+    extractLccnCandidates(item).forEach((value) => lccns.push(value));
 
     for (const heading of toStringList(item.subject_headings ?? item.subjects ?? item.subject)) {
       if (isHeadingNoise(heading)) continue;
@@ -590,7 +664,12 @@ const mapLocItemsToCandidates = (
     }
   }
 
-  return { headings, names, detailUrls: toUniqueArray(detailUrls).slice(0, 3) };
+  return {
+    headings,
+    names,
+    detailUrls: toUniqueArray(detailUrls).slice(0, 3),
+    lccns: toUniqueArray(lccns),
+  };
 };
 
 const buildViaMcp = async (
@@ -675,6 +754,7 @@ const buildViaDirect = async (
   const headings: LocAuthorityHeadingCandidate[] = [];
   const names: LocAuthorityNameCandidate[] = [];
   const detailUrls = new Set<string>();
+  const lccns = new Set<string>();
 
   const identifier = sanitizeIdentifier(input.identifier);
   const runSearchPhase = async (queries: string[]): Promise<boolean> => {
@@ -696,6 +776,7 @@ const buildViaDirect = async (
         mapped.headings.forEach((candidate) => headings.push(candidate));
         mapped.names.forEach((candidate) => names.push(candidate));
         mapped.detailUrls.forEach((url) => detailUrls.add(url));
+        mapped.lccns.forEach((value) => lccns.add(value));
       } catch (error: any) {
         const message = error?.message || 'unknown error';
         if (!(error instanceof LocServiceUnavailableError)) {
@@ -743,6 +824,7 @@ const buildViaDirect = async (
         const mapped = mapLocItemsToCandidates(detailItems, detailUrl, input);
         mapped.headings.forEach((candidate) => headings.push(candidate));
         mapped.names.forEach((candidate) => names.push(candidate));
+        mapped.lccns.forEach((value) => lccns.add(value));
       } catch (error: any) {
         const message = error?.message || 'unknown error';
         if (!(error instanceof LocServiceUnavailableError)) {
@@ -761,6 +843,7 @@ const buildViaDirect = async (
     enabled: true,
     lcshCandidates: dedupeHeadings(headings).slice(0, 20),
     nameCandidates: dedupeNames(names).slice(0, 10),
+    recordLinks: Array.from(lccns)[0] ? buildRecordLinksFromLccn(Array.from(lccns)[0]) : undefined,
     warnings,
   };
 };

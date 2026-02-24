@@ -57,6 +57,7 @@ describe('LOC authority service', () => {
             {
               title: 'The Adventures of Sherlock Holmes',
               url: 'https://www.loc.gov/item/123',
+              lccn: ['2003556443'],
               subject_headings: [
                 'Detective and mystery stories, English',
                 'Holmes, Sherlock (Fictitious character) -- Fiction',
@@ -79,6 +80,10 @@ describe('LOC authority service', () => {
     expect(context?.lcshCandidates.length).toBeGreaterThan(0);
     expect(context?.nameCandidates.length).toBeGreaterThan(0);
     expect(context?.nameCandidates.some((candidate) => candidate.label === 'Arthur Conan Doyle')).toBe(true);
+    expect(context?.recordLinks?.lccn).toBe('2003556443');
+    expect(context?.recordLinks?.marcXmlUrl).toBe('https://lccn.loc.gov/2003556443/marcxml');
+    expect(context?.recordLinks?.modsUrl).toBe('https://lccn.loc.gov/2003556443/mods');
+    expect(context?.recordLinks?.bibframe2Url).toBe('https://lccn.loc.gov/2003556443/bibframe2');
     expect(context?.warnings.length).toBe(0);
     expect(fetchMock).toHaveBeenCalled();
     const firstUrl = String(fetchMock.mock.calls[0][0]);

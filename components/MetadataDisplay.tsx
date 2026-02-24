@@ -23,6 +23,13 @@ interface LocAuthoritySummary {
   provider: string;
   lcshCandidateCount: number;
   nameCandidateCount: number;
+  recordLinks?: {
+    lccn: string;
+    permalinkUrl: string;
+    marcXmlUrl: string;
+    modsUrl: string;
+    bibframe2Url: string;
+  };
   warnings?: string[];
 }
 
@@ -352,6 +359,53 @@ export const MetadataDisplay: React.FC<MetadataDisplayProps> = ({ metadata, isDa
                   <p>
                     {metadata.locAuthority.lcshCandidateCount} subject candidates, {metadata.locAuthority.nameCandidateCount} name candidates.
                   </p>
+                  {metadata.locAuthority.recordLinks && (
+                    <div className="space-y-1">
+                      <ProvenanceNote text={`LCCN: ${metadata.locAuthority.recordLinks.lccn}`} isDark={isDark} />
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        <a
+                          href={metadata.locAuthority.recordLinks.permalinkUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={`inline-flex items-center rounded px-2 py-1 text-xs font-medium ${
+                            isDark ? 'bg-cyan-900 text-cyan-200 hover:bg-cyan-800' : 'bg-cyan-100 text-cyan-700 hover:bg-cyan-200'
+                          }`}
+                        >
+                          LOC Record
+                        </a>
+                        <a
+                          href={metadata.locAuthority.recordLinks.marcXmlUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={`inline-flex items-center rounded px-2 py-1 text-xs font-medium ${
+                            isDark ? 'bg-cyan-900 text-cyan-200 hover:bg-cyan-800' : 'bg-cyan-100 text-cyan-700 hover:bg-cyan-200'
+                          }`}
+                        >
+                          MARCXML
+                        </a>
+                        <a
+                          href={metadata.locAuthority.recordLinks.modsUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={`inline-flex items-center rounded px-2 py-1 text-xs font-medium ${
+                            isDark ? 'bg-cyan-900 text-cyan-200 hover:bg-cyan-800' : 'bg-cyan-100 text-cyan-700 hover:bg-cyan-200'
+                          }`}
+                        >
+                          MODS
+                        </a>
+                        <a
+                          href={metadata.locAuthority.recordLinks.bibframe2Url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={`inline-flex items-center rounded px-2 py-1 text-xs font-medium ${
+                            isDark ? 'bg-cyan-900 text-cyan-200 hover:bg-cyan-800' : 'bg-cyan-100 text-cyan-700 hover:bg-cyan-200'
+                          }`}
+                        >
+                          BIBFRAME2
+                        </a>
+                      </div>
+                    </div>
+                  )}
                   {metadata.locAuthority.warnings && metadata.locAuthority.warnings.length > 0 && (
                     <ProvenanceNote text={`Warnings: ${metadata.locAuthority.warnings.join(' | ')}`} isDark={isDark} />
                   )}

@@ -291,6 +291,7 @@ export async function analyzeBook(req: Request, res: Response, next: NextFunctio
           provider: locAuthorityContext.provider,
           lcshCandidateCount: locAuthorityContext.lcshCandidates.length,
           nameCandidateCount: locAuthorityContext.nameCandidates.length,
+          recordLinks: locAuthorityContext.recordLinks,
           warnings: locAuthorityContext.warnings,
         }
         : undefined,
@@ -519,6 +520,7 @@ export async function analyzeExtractedText(req: Request, res: Response, next: Ne
           provider: locAuthorityContext.provider,
           lcshCandidateCount: locAuthorityContext.lcshCandidates.length,
           nameCandidateCount: locAuthorityContext.nameCandidates.length,
+          recordLinks: locAuthorityContext.recordLinks,
           warnings: locAuthorityContext.warnings,
         }
         : undefined,
