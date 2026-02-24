@@ -257,6 +257,19 @@ export const ExportButton: React.FC<ExportButtonProps> = ({ fileName, metadata, 
       marcLines.push(`=520  ${blankIndicator}$a${summary}`);
     }
 
+    const aiAssistedFields: string[] = [];
+    if (summary) {
+      aiAssistedFields.push('520');
+    }
+    if (metadata.lcsh && metadata.lcsh.length > 0) {
+      aiAssistedFields.push('650');
+    }
+    if (aiAssistedFields.length > 0) {
+      const fieldList = aiAssistedFields.join(' and ');
+      const verb = aiAssistedFields.length > 1 ? 'were' : 'was';
+      marcLines.push(`=588  ${blankIndicator}$aThe ${fieldList} metadata ${verb} created using AI assistance.`);
+    }
+
     if (metadata.lcsh && metadata.lcsh.length > 0) {
       metadata.lcsh.forEach(heading => {
         const lcshText = formatLcsh(heading);
