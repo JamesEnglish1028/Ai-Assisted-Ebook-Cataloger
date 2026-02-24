@@ -7,6 +7,9 @@ const makeJsonResponse = (payload: unknown) =>
   ({
     ok: true,
     status: 200,
+    headers: {
+      get: (name: string) => (name.toLowerCase() === 'content-type' ? 'application/json' : null),
+    },
     json: async () => payload,
     text: async () => JSON.stringify(payload),
   } as Response);

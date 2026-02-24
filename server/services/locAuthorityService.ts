@@ -322,6 +322,46 @@ const sanitizeIdentifier = (value: string | undefined): string | undefined => {
   return cleaned.length >= 8 ? cleaned : undefined;
 };
 
+const normalizeLocUrl = (value: string | undefined): string | undefined => {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  if (trimmed.startsWith('//')) return `https:${trimmed}`;
+  if (trimmed.startsWith('/')) return `https://www.loc.gov${trimmed}`;
+  return trimmed;
+};
+
+const isLikelyLocItemUrl = (url: string | undefined): boolean => {
+  if (!url) return false;
+  try {
+    const parsed = new URL(url);
+    if (!parsed.hostname.endsWith('loc.gov')) return false;
+    if (/\.pdf$/i.test(parsed.pathname)) return false;
+    return parsed.pathname.includes('/item/');
+  } catch {
+    return false;
+  }
+};
+
+const isHeadingNoise = (heading: string): boolean => {
+  const normalized = heading.toLowerCase();
+  return (
+    normalized.includes('library of congress subject headings') ||
+    normalized.includes('subject headings manual') ||
+    normalized === 'lcsh' ||
+    normalized === 'classification'
+  );
+};
+
+const isNameNoise = (label: string): boolean => {
+  const normalized = label.toLowerCase();
+  return (
+    normalized.includes('library of congress') ||
+    normalized.includes('subject headings manual') ||
+    normalized === 'lcsh'
+  );
+};
+
 const buildLocSearchUrl = (baseUrl: string, query: string, maxResults: number): string => {
   const normalizedBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
   const url = new URL(normalizedBase);
@@ -340,6 +380,10 @@ const fetchJsonWithTimeout = async (url: string, timeoutMs: number): Promise<unk
     if (!response.ok) {
       const detail = await response.text();
       throw new Error(`HTTP ${response.status}: ${detail}`);
+    }
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      throw new Error(`Expected JSON response but received content-type "${contentType || 'unknown'}"`);
     }
     return await response.json();
   } finally {
@@ -367,10 +411,12 @@ const mapLocItemsToCandidates = (
   const detailUrls: string[] = [];
 
   for (const item of items) {
-    const itemUrl = typeof item.url === 'string' ? item.url : undefined;
-    if (itemUrl) detailUrls.push(itemUrl);
+    const itemUrl = normalizeLocUrl(typeof item.url === 'string' ? item.url : undefined);
+    const isLikelyItem = isLikelyLocItemUrl(itemUrl);
+    if (isLikelyItem && itemUrl) detailUrls.push(itemUrl);
 
     for (const heading of toStringList(item.subject_headings ?? item.subjects ?? item.subject)) {
+      if (isHeadingNoise(heading)) continue;
       headings.push({
         heading,
         uri: itemUrl,
@@ -388,6 +434,7 @@ const mapLocItemsToCandidates = (
       ...toStringList(item.name),
     ];
     for (const label of rawNames) {
+      if (isNameNoise(label)) continue;
       names.push({
         label,
         uri: itemUrl,
