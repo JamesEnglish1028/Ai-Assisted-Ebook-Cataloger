@@ -258,17 +258,14 @@ export const ExportButton: React.FC<ExportButtonProps> = ({ fileName, metadata, 
     }
 
     const aiAssistedFields: string[] = [];
-    if (summary) {
-      aiAssistedFields.push('520');
-    }
-    if (metadata.lcsh && metadata.lcsh.length > 0) {
-      aiAssistedFields.push('650');
-    }
-    if (aiAssistedFields.length > 0) {
-      const fieldList = aiAssistedFields.join(' and ');
-      const verb = aiAssistedFields.length > 1 ? 'were' : 'was';
-      marcLines.push(`=588  ${blankIndicator}$aThe ${fieldList} metadata ${verb} created using AI assistance.`);
-    }
+    if (summary) aiAssistedFields.push('520');
+    if (metadata.lcsh && metadata.lcsh.length > 0) aiAssistedFields.push('650');
+
+    const aiFieldNote =
+      aiAssistedFields.length > 0
+        ? `AI assistance was used to generate metadata for MARC field(s): ${aiAssistedFields.join(', ')}.`
+        : 'Cataloging metadata was generated with AI assistance.';
+    marcLines.push(`=588  ${blankIndicator}$a${aiFieldNote}`);
 
     if (metadata.lcsh && metadata.lcsh.length > 0) {
       metadata.lcsh.forEach(heading => {
